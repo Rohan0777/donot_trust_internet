@@ -139,8 +139,20 @@ delta    = max(desired, −position) | desired   # 보유수량내 | 무한공�
 python -m scripts.collect status                        # 원장/실행이력 조회
 python -m scripts.collect master                        # KOSPI 종목마스터
 python -m scripts.collect prices 000660 --years 3
-python -m scripts.collect news   000660 --days 30
-python -m scripts.collect board  000660 --days 30 --max-pages 3000
+python -m scripts.collect news   000660 --days 30           # 네이버 금융 종목뉴스
+python -m scripts.collect board  000660 --days 30           # 종목토론방
+python -m scripts.collect gnews  000660 --start 2026-01-01 --end 2026-07-01 --step 1
+```
+
+### 후처리 / 유지보수
+
+```powershell
+python -m scripts.map_media                # 매체 등급 적용 + 한글명·도메인 병합
+python -m scripts.map_media --report       # 미분류 비중 조회
+python -m scripts.recover_press            # URL에서 매체 복원 (네트워크 불필요)
+python -m scripts.dedup --all              # 근사중복 판정 + 도배 억제
+python -m scripts.score 035720 --dry-run   # 채점 비용 추정
+python -m scripts.score 035720 --limit 500 # LLM 채점 (OPENAI_API_KEY 필요)
 ```
 
 장시간 백필은 백그라운드로 떼어놓는다. 진행상황은 로그 파일과 `pipeline_runs`
@@ -163,6 +175,15 @@ python -m scripts.collect status
 - **네이버 검색 오픈API는 백필에 쓸 수 없다.** 쿼리당 1000건 상한(`start<=1000`),
   날짜 범위 지정 불가(`sort=date`만). `days_back`을 키워도 같은 최신 1000건이
   돌아온다. 구 코드가 이걸로 1년치 루프를 돌려 신규 0건을 얻었다. **일간 증분 전용.**
+- **Google News RSS는 쿼리당 100건 상한이고, 창 밖 기사를 섞어 100건을 채운다.**
+  따라서 "응답이 100건" ≠ "잘렸다". 절단 판정은 반드시 *요청한 날짜 창 안에 든*
+  건수로 해야 한다 — 응답 건수로 판정하면 이미 완전 수집한 날짜가 영영 `partial`에
+  갇힌다. 실측: 카카오 1일 창에서 응답 100건 중 창내 15건인 날이 흔하다.
+- **Google News의 `link`는 리다이렉트라 원문 URL을 알 수 없다.** 본문은 수집하지
+  않고 제목만 쓴다. 대신 `<source url>`이 매체명·도메인을 정확히 준다.
+- **종목명 모호성은 수집 단계에서 걸러야 한다.** "카카오" 질의는 카카오뱅크·
+  카카오페이 기사를 함께 끌어온다(실측 6개월 백필에서 제외 대상이 전체의 40% 수준).
+  `stocks.exclude_json`의 제외어를 지운 뒤에도 종목명이 남아야 본 종목 기사로 본다.
 - **`cafearticle` 검색엔 게시일 필드가 없다.** `ts_confidence='approx'`로 격리한다.
 - **디시인사이드 주식갤러리(`stock_new1`)는 2017-01 이후 사실상 죽은 갤러리다.**
   커뮤니티 소스로 기대하지 말 것.

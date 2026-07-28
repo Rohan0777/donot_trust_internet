@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.collectors import naver_board, naver_news, price
+from app.collectors import google_news_rss, naver_board, naver_news, price
 from app.db.conn import get_conn, init_db
 from app.db.dao import RunLogger, refresh_sentiment_daily
 
@@ -88,6 +88,28 @@ def cmd_news(args, log):
         refresh_sentiment_daily(conn, args.code)
 
 
+def cmd_gnews(args, log):
+    """Google News RSS 백필. 네이버 검색 API가 못 하는 과거 구간을 담당한다."""
+    from datetime import date, timedelta
+
+    end = args.end or date.today().isoformat()
+    start = args.start or (date.fromisoformat(end) - timedelta(days=args.days)).isoformat()
+    with get_conn() as conn:
+        row = conn.execute("SELECT name FROM stocks WHERE code = ?", (args.code,)).fetchone()
+        if not row:
+            raise SystemExit(f"등록되지 않은 종목: {args.code}")
+        with RunLogger(conn, "gnews", args.code) as run:
+            log(f"=== [gnews] {row['name']}({args.code}) {start} ~ {end} (창 {args.step}일) ===")
+            stats = google_news_rss.crawl_range(conn, args.code, row["name"], start, end,
+                                                step_days=args.step, progress=log)
+            run.finish(stats)
+        log(f"=== [gnews] 완료: {stats} ===")
+        if stats["truncated"]:
+            log(f"  [경고] {stats['truncated']}개 창이 100건 상한에 도달했다. "
+                f"--step 을 줄여 해당 구간을 재수집하라 (coverage가 partial로 남아 있다).")
+        refresh_sentiment_daily(conn, args.code)
+
+
 def cmd_prices(args, log):
     with get_conn() as conn:
         n = price.collect_prices(conn, args.code, years=args.years)
@@ -112,6 +134,13 @@ def main():
     p.add_argument("code")
     p.add_argument("--years", type=int, default=3)
 
+    p_g = sub.add_parser("gnews", help="Google News RSS 백필 (과거 구간 담당)")
+    p_g.add_argument("code")
+    p_g.add_argument("--days", type=int, default=90, help="end 기준 소급 일수")
+    p_g.add_argument("--start", default=None, help="YYYY-MM-DD")
+    p_g.add_argument("--end", default=None, help="YYYY-MM-DD")
+    p_g.add_argument("--step", type=int, default=1, help="창 크기(일). 상한에 걸리면 줄인다")
+
     for name, default_pages in (("news", 5000), ("board", 3000)):
         q = sub.add_parser(name, help=f"{name} 수집")
         q.add_argument("code")
@@ -125,7 +154,7 @@ def main():
     log = Tee(args.log)
     init_db()
     {"status": cmd_status, "master": cmd_master, "prices": cmd_prices,
-     "news": cmd_news, "board": cmd_board}[args.cmd](args, log)
+     "news": cmd_news, "board": cmd_board, "gnews": cmd_gnews}[args.cmd](args, log)
 
 
 if __name__ == "__main__":
