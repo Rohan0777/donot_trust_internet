@@ -22,7 +22,7 @@ from app.db.dao import now_utc
 from app.scoring.prompts import build_system
 
 LABEL_TO_INT = {"positive": 1, "negative": -1, "neutral": 0}
-BATCH_SIZE = 25
+BATCH_SIZE = 15
 MAX_BODY_CHARS = 600
 REQUEST_TIMEOUT = 60.0
 MAX_ATTEMPTS = 3

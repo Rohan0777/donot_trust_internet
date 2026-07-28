@@ -25,7 +25,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = "gpt-4o-mini"
 # 프롬프트를 바꾸면 이 값을 반드시 올린다. 과거 라벨과 새 라벨이 섞이면
 # 감성지수에 인공적인 단절(regime shift)이 생기고 백테스트가 그걸 학습한다.
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
