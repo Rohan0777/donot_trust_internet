@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>인터넷을 믿지 마세요</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0a0e17; --panel:#111827; --panel2:#0f1623; --line:#1f2937;
+  --tx:#e5e7eb; --tx2:#94a3b8; --tx3:#64748b;
+  --price:#38bdf8; --pos:#10b981; --neg:#f43f5e; --amber:#f59e0b; --violet:#a78bfa;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);
+  font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;font-size:14px}
+.wrap{max-width:1440px;margin:0 auto;padding:16px}
+header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+  padding:14px 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.5px}
+h1 span{color:var(--amber)}
+.spacer{flex:1}
+select,input[type=number]{background:var(--panel2);color:var(--tx);border:1px solid var(--line);
+  border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit}
+input[type=number]{width:92px;text-align:right;font-variant-numeric:tabular-nums}
+input[type=number]:focus,select:focus{outline:none;border-color:var(--price)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px}
+.zone-title{font-size:12px;font-weight:700;color:var(--tx3);letter-spacing:.8px;
+  text-transform:uppercase;margin:0 0 12px}
+.chart-box{position:relative;height:340px}
+.chart-box.tall{height:380px}
+.seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+.seg button{background:none;border:0;color:var(--tx2);padding:7px 14px;border-radius:6px;
+  cursor:pointer;font-size:13px;font-family:inherit;white-space:nowrap}
+.seg button.on{background:#233047;color:#fff;font-weight:700}
+.seg button.on.warn{background:#7c2d12;color:#fed7aa}
+.seg button.on.good{background:#064e3b;color:#a7f3d0}
+.ctl-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.ctl-label{font-size:12px;color:var(--tx3);min-width:74px;font-weight:600}
+.hint{font-size:11.5px;color:var(--tx3)}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:4px}
+.wcell{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 12px}
+.wcell.alert{border-color:#78350f;background:#1c1408}
+.wname{font-size:13px;display:flex;align-items:center;gap:6px}
+.badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:99px;background:#78350f;color:#fed7aa}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 13px}
+.stat .k{font-size:11px;color:var(--tx3);margin-bottom:4px}
+.stat .v{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.hero{position:absolute;top:6px;left:14px;pointer-events:none;z-index:5}
+.hero .lab{font-size:11px;color:var(--tx3);letter-spacing:.5px}
+.hero .num{font-size:34px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+.hero .sub{font-size:12px;color:var(--tx2);margin-top:2px;font-variant-numeric:tabular-nums}
+.up{color:var(--pos)} .down{color:var(--neg)}
+.notice{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:12.5px;
+  background:#1c1408;border:1px solid #78350f;color:#fed7aa}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:99px;
+  padding:4px 10px;font-size:12px;cursor:pointer;color:var(--tx2)}
+.chip.on{background:#233047;color:#fff;border-color:#334155}
+footer{color:var(--tx3);font-size:11.5px;padding:18px 4px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>인터넷을 <span>믿지 마세요</span></h1>
+  <select id="code"></select>
+  <div class="seg" id="freq">
+    <button data-v="daily" class="on">일별</button>
+    <button data-v="weekly">주간</button>
+    <button data-v="monthly">월간</button>
+  </div>
+  <div class="seg" id="rng">
+    <button data-v="data" class="on">데이터 구간</button>
+    <button data-v="3m">3M</button>
+    <button data-v="6m">6M</button>
+    <button data-v="1y">1Y</button>
+    <button data-v="all">전체</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="hint" id="coverage">데이터 확인 중…</div>
+</header>
+
+<!-- ZONE 1 -->
+<div class="panel">
+  <div class="ctl-row" style="margin-bottom:10px">
+    <p class="zone-title" style="margin:0">Zone 1 · 주가 &amp; 감성지수</p>
+    <div class="spacer"></div>
+    <div class="seg" id="by">
+      <button data-v="total" class="on">종합</button>
+      <button data-v="tier">등급별</button>
+      <button data-v="media">매체별</button>
+    </div>
+  </div>
+  <div class="chart-box"><canvas id="c1"></canvas></div>
+  <div class="chips" id="mediaChips" style="display:none"></div>
+</div>
+
+<!-- ZONE 2 -->
+<div class="panel">
+  <p class="zone-title">Zone 2 · 전략 랩</p>
+  <div class="ctl-row">
+    <span class="ctl-label">① 방향</span>
+    <div class="seg" id="direction">
+      <button data-v="forward" class="on">정방향 · 인터넷 믿기</button>
+      <button data-v="contrarian">역배팅 · 청개구리</button>
+    </div>
+  </div>
+  <div class="ctl-row">
+    <span class="ctl-label">② 포지션</span>
+    <div class="seg" id="poslimit">
+      <button data-v="long_only" class="on">보유 수량 내 매도 (≥0주)</button>
+      <button data-v="unlimited">무한 공매도 (± 무제한)</button>
+    </div>
+  </div>
+  <div class="ctl-row">
+    <span class="ctl-label">③ 비용</span>
+    <div class="seg" id="fees">
+      <button data-v="on" class="on good">반영 · 수수료+세금+슬리피지</button>
+      <button data-v="off">무시 · 이론값</button>
+    </div>
+    <span class="hint">비용을 끄면 이론상 수익이지만, 실제 계좌는 켠 쪽입니다.</span>
+  </div>
+
+  <div class="ctl-row" style="margin:16px 0 2px">
+    <span class="ctl-label">④ 가중치</span>
+    <span class="hint">1점 = 1주 · <b id="pointValue">–</b> · 긍정 건수 − 부정 건수에 곱해집니다</span>
+  </div>
+  <div class="wgrid" id="weights"></div>
+  <div class="notice" id="mapWarn" style="display:none"></div>
+</div>
+
+<!-- ZONE 3 -->
+<div class="panel">
+  <p class="zone-title">Zone 3 · 백테스팅 결과 · 3선 분해</p>
+  <div class="chart-box tall">
+    <div class="hero">
+      <div class="lab">실질 수익률 · 최대 소요자본 대비</div>
+      <div class="num" id="heroPct">–</div>
+      <div class="sub" id="heroSub">–</div>
+    </div>
+    <canvas id="c2"></canvas>
+  </div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<footer>
+  체결 규칙 — 신호는 전일 15:30 ~ 당일 08:50(KST)에 게시된 글로 확정되고, 당일 <b>시가</b>에 체결됩니다.<br>
+  수익률의 분모는 누적 투입금이 아니라 <b>최대 소요자본</b>입니다. 누적 투입금은 매도가 쌓이면 음수가 되어 부호가 뒤집히고 0 근처에서 발산합니다.<br>
+  현금 잔고가 −N원이라는 것은 그 시점에 <b>N원의 자본이 실제로 필요했다</b>는 뜻입니다.
+</footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const TIERS = [
+  {k:'major',     n:'주요 언론사',   d:5.0},
+  {k:'daily',     n:'일간지 언론사', d:1.0},
+  {k:'online',    n:'인터넷 언론',   d:0.05},
+  {k:'unknown',   n:'미분류',        d:1.0, alert:true},
+  {k:'blog',      n:'블로그',        d:0.01},
+  {k:'community', n:'커뮤니티',      d:0.001},
+];
+const TIER_KO = {major:'주요 언론사',daily:'일간지',online:'인터넷 언론',
+                 unknown:'미분류',blog:'블로그',community:'커뮤니티'};
+const PALETTE = ['#38bdf8','#f59e0b','#a78bfa','#10b981','#f43f5e','#e879f9','#22d3ee','#fb923c'];
+
+const S = {code:null, freq:'daily', rng:'data', by:'total', direction:'forward',
+           poslimit:'long_only', fees:'on', media:[], w:{}};
+TIERS.forEach(t => S.w[t.k] = t.d);
+
+const krw = v => (v<0?'−':'') + Math.abs(Math.round(v)).toLocaleString('ko-KR') + '원';
+const sign = v => (v>0?'+':v<0?'−':'') + Math.abs(v).toLocaleString('ko-KR');
+
+// 데이터 없는 구간을 회색 음영으로 — 선을 끊으면 "0"으로 오해된다.
+const gapPlugin = {
+  id:'gaps',
+  beforeDatasetsDraw(chart, _a, opts){
+    const gaps = opts.gaps || [], labels = chart.data.labels;
+    if(!gaps.length || !labels.length) return;
+    const {ctx, chartArea:ca, scales:{x}} = chart;
+    ctx.save(); ctx.fillStyle = 'rgba(148,163,184,.09)';
+    gaps.forEach(([a,b]) => {
+      const i = labels.indexOf(a), j = labels.indexOf(b);
+      if(i < 0 || j < 0 || j <= i) return;
+      const x1 = x.getPixelForValue(i), x2 = x.getPixelForValue(j);
+      ctx.fillRect(x1, ca.top, x2-x1, ca.bottom-ca.top);
+    });
+    ctx.restore();
+  }
+};
+Chart.register(gapPlugin);
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.font.family = "'Pretendard','Malgun Gothic',sans-serif";
+Chart.defaults.animation = false;
+
+let c1, c2;
+
+function segment(id, key, cb){
+  $('#'+id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    [...e.currentTarget.children].forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    if(id==='fees'){ b.classList.toggle('good', b.dataset.v==='on');
+                     b.classList.toggle('warn', b.dataset.v==='off'); }
+    S[key] = b.dataset.v; cb();
+  });
+}
+
+function buildWeights(){
+  $('#weights').innerHTML = TIERS.map(t => `
+    <div class="wcell ${t.alert?'alert':''}">
+      <span class="wname">${t.n}${t.alert?'<span class="badge" id="unkBadge">–</span>':''}</span>
+      <input type="number" step="0.001" min="0" max="1000" value="${t.d}" data-k="${t.k}">
+    </div>`).join('');
+  $('#weights').addEventListener('input', e => {
+    const el = e.target; if(!el.dataset.k) return;
+    const v = parseFloat(el.value);
+    S.w[el.dataset.k] = (isFinite(v) && v>=0) ? v : 0;
+    debounce(loadBacktest);
+  });
+}
+
+let timer;
+function debounce(fn){ clearTimeout(timer); timer = setTimeout(fn, 220); }
+const wParam = () => Object.entries(S.w).map(([k,v]) => `${k}:${v}`).join(',');
+
+async function loadStocks(){
+  const rows = await (await fetch('/api/stocks')).json();
+  $('#code').innerHTML = rows.map(r =>
+    `<option value="${r.code}">${r.name} (${r.code})</option>`).join('');
+  S.code = rows[0]?.code;
+  const r = rows.find(x => x.code === S.code);
+  if(r) $('#coverage').innerHTML =
+    `⚠ 데이터 보유 <b>${r.mn} ~ ${r.mx}</b> · ${r.days}일 · ${r.docs.toLocaleString()}건`;
+
+  const m = await (await fetch('/api/mapping-progress')).json();
+  const badge = $('#unkBadge'); if(badge) badge.textContent = m.unknown_pct + '%';
+  if(m.unknown_pct > 20){
+    $('#mapWarn').style.display = 'block';
+    $('#mapWarn').innerHTML =
+      `⚠ 뉴스 문서의 <b>${m.unknown_pct}%</b>가 아직 등급 미분류(<code>unknown</code>)입니다 ` +
+      `(매체 ${m.media_mapped}/${m.media_total}곳 분류 완료). ` +
+      `이 상태에서는 주요언론 가중치를 올려도 차트가 거의 움직이지 않습니다 — ` +
+      `가중치가 무의미한 게 아니라 <b>데이터가 아직 분류되지 않은 것</b>입니다.`;
+  }
+}
+
+async function loadChart(){
+  const ids = S.by==='media' && S.media.length ? `&media_ids=${S.media.join(',')}` : '';
+  const d = await (await fetch(`/api/chart?code=${S.code}&freq=${S.freq}&rng=${S.rng}&by=${S.by}${ids}`)).json();
+
+  if(S.by==='media'){
+    $('#mediaChips').style.display = 'flex';
+    $('#mediaChips').innerHTML = d.media_catalog.slice(0,14).map(m =>
+      `<span class="chip ${S.media.includes(m.media_id)?'on':''}" data-id="${m.media_id}">
+        ${m.name} <b style="color:#64748b">${m.docs.toLocaleString()}</b></span>`).join('');
+  } else $('#mediaChips').style.display = 'none';
+
+  const labels = d.price.dates;
+  const idx = Object.fromEntries(d.sentiment.dates.map((x,i)=>[x,i]));
+  const align = arr => labels.map(l => idx[l]===undefined ? null : arr[idx[l]]);
+
+  const ds = [{
+    label:'주가 (종가)', data:d.price.close, borderColor:'#38bdf8', borderWidth:2,
+    pointRadius:0, yAxisID:'yP', tension:.15, order:10
+  }];
+  Object.entries(d.sentiment.series).slice(0,8).forEach(([name,vals],i) => {
+    const color = S.by==='total' ? '#a78bfa' : PALETTE[i % PALETTE.length];
+    ds.push({label:(TIER_KO[name]||name)+' 감성', data:align(vals), borderColor:color,
+      backgroundColor:color+'33', borderWidth:1.6, pointRadius:0, yAxisID:'yS',
+      tension:.2, spanGaps:true, order:1});
+  });
+
+  c1?.destroy();
+  c1 = new Chart($('#c1'), {type:'line', data:{labels, datasets:ds}, options:{
+    responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+    scales:{
+      x:{grid:{color:'#1f2937'},ticks:{maxTicksLimit:12,font:{size:11}}},
+      yP:{position:'left',grid:{color:'#1f2937'},title:{display:true,text:'주가 (KRW)'},
+          ticks:{callback:v=>(v/1000)+'K',font:{size:11}}},
+      yS:{position:'right',min:-1.05,max:1.05,grid:{display:false},
+          title:{display:true,text:'감성지수 (−1 ~ +1)'},ticks:{font:{size:11}}}
+    },
+    plugins:{
+      gaps:{gaps:d.coverage_gaps},
+      legend:{labels:{boxWidth:12,font:{size:11.5}}},
+      tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='yP'
+        ? ` 주가 ${Math.round(c.parsed.y).toLocaleString()}원`
+        : ` ${c.dataset.label} ${c.parsed.y?.toFixed(3) ?? '–'}`}}
+    }
+  }});
+}
+
+async function loadBacktest(){
+  const url = `/api/backtest?code=${S.code}&direction=${S.direction}` +
+              `&position_limit=${S.poslimit}&fees=${S.fees==='on'}&w=${wParam()}`;
+  const d = await (await fetch(url)).json();
+  $('#pointValue').textContent = d.point_value_krw
+    ? `현재 1주 ≈ ${d.point_value_krw.toLocaleString()}원` : '–';
+
+  const s = d.summary;
+  if(s.error){
+    $('#heroPct').textContent = '–'; $('#heroSub').textContent = s.error;
+    $('#stats').innerHTML = ''; c2?.destroy(); c2 = null; return;
+  }
+
+  const up = s.real_return_pct >= 0;
+  $('#heroPct').className = 'num ' + (up?'up':'down');
+  $('#heroPct').textContent = (up?'+':'−') + Math.abs(s.real_return_pct).toFixed(2) + '%';
+  $('#heroSub').textContent =
+    `순손익 ${sign(s.net_pnl)}원 · 최대 소요자본 ${s.peak_capital.toLocaleString()}원`;
+
+  $('#stats').innerHTML = [
+    ['순손익',        sign(s.net_pnl)+'원',                 up?'up':'down'],
+    ['최대 소요자본', s.peak_capital.toLocaleString()+'원',  ''],
+    ['최대 낙폭(MDD)', sign(s.mdd_krw)+'원 · '+s.mdd_pct+'%','down'],
+    ['총 거래비용',   sign(s.total_cost)+'원',              s.total_cost?'down':''],
+    ['거래 횟수',     s.trades.toLocaleString()+'회',        ''],
+    ['최종 포지션',   s.final_position.toLocaleString()+'주', s.final_position<0?'down':''],
+    ['Buy & Hold',   sign(s.buy_hold_pnl)+'원',             s.buy_hold_pnl>=0?'up':'down'],
+    ['거래일 수',     s.days.toLocaleString()+'일',          ''],
+  ].map(([k,v,c]) => `<div class="stat"><div class="k">${k}</div>
+     <div class="v ${c}">${v}</div></div>`).join('');
+
+  c2?.destroy();
+  c2 = new Chart($('#c2'), {type:'line', data:{labels:d.dates, datasets:[
+    {label:'순손익 (현금+평가액)', data:d.net_pnl, borderColor:'#10b981', borderWidth:2.8,
+     pointRadius:0, tension:.15, fill:{target:{value:0}},
+     backgroundColor:'rgba(16,185,129,.10)', order:1},
+    {label:'주식 평가액', data:d.equity, borderColor:'#38bdf8', borderWidth:1.5,
+     borderDash:[5,3], pointRadius:0, tension:.15, order:2},
+    {label:'현금 잔고 (음수 = 필요 자본)', data:d.cash, borderColor:'#f59e0b', borderWidth:1.5,
+     borderDash:[2,3], pointRadius:0, tension:.15, order:3},
+    {label:'Buy & Hold (동일 자본)', data:d.buy_hold, borderColor:'#475569', borderWidth:1.2,
+     pointRadius:0, tension:.15, order:4},
+  ]}, options:{
+    responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+    layout:{padding:{top:64}},
+    scales:{
+      x:{grid:{color:'#1f2937'},ticks:{maxTicksLimit:12,font:{size:11}}},
+      y:{grid:{color:c=>c.tick.value===0?'#475569':'#1f2937',
+               lineWidth:c=>c.tick.value===0?1.8:1},
+         title:{display:true,text:'KRW'},
+         ticks:{callback:v=>(v/1e6).toFixed(0)+'M',font:{size:11}}}
+    },
+    plugins:{
+      legend:{labels:{boxWidth:12,font:{size:11.5}}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label} ${krw(c.parsed.y)}`}}
+    }
+  }});
+}
+
+function refresh(){ loadChart(); loadBacktest(); }
+
+segment('freq','freq', loadChart);
+segment('rng','rng', loadChart);
+segment('by','by', loadChart);
+segment('direction','direction', loadBacktest);
+segment('poslimit','poslimit', loadBacktest);
+segment('fees','fees', loadBacktest);
+$('#code').addEventListener('change', e => { S.code = e.target.value; S.media=[]; refresh(); });
+$('#mediaChips').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if(!c) return;
+  const id = +c.dataset.id;
+  S.media = S.media.includes(id) ? S.media.filter(x=>x!==id) : [...S.media, id].slice(-6);
+  loadChart();
+});
+
+buildWeights();
+loadStocks().then(refresh);
+</script>
+</body>
+</html>

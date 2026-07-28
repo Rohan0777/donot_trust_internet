@@ -1,0 +1,133 @@
+"""수집 전용 실행기 — 서빙/분석과 완전히 분리된 독립 프로세스.
+
+장시간 백필을 백그라운드로 돌리기 위한 진입점이다. 진행상황은 stdout과
+pipeline_runs 테이블 양쪽에 남으므로, 프로세스를 떼어놓고도 DB로 상태를 볼 수 있다.
+
+  python -m scripts.collect status
+  python -m scripts.collect prices 000660 --years 3
+  python -m scripts.collect news   000660 --days 30
+  python -m scripts.collect board  000660 --days 30 --max-pages 3000
+  python -m scripts.collect board  000660 --days 180 --log logs/board_000660.log
+"""
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.collectors import naver_board, naver_news, price
+from app.db.conn import get_conn, init_db
+from app.db.dao import RunLogger, refresh_sentiment_daily
+
+
+class Tee:
+    def __init__(self, path: Path | None):
+        self.fh = None
+        if path:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.fh = path.open("a", encoding="utf-8")
+
+    def __call__(self, *args, **kwargs):
+        kwargs.pop("flush", None)
+        msg = " ".join(str(a) for a in args)
+        print(msg, flush=True)
+        if self.fh:
+            self.fh.write(msg + "\n")
+            self.fh.flush()
+
+
+def cmd_status(args, log):
+    with get_conn() as conn:
+        log("=== 수집 원장 (coverage) ===")
+        for r in conn.execute(
+            "SELECT code, source, status, COUNT(*) days, MIN(kst_date) mn, MAX(kst_date) mx, "
+            "SUM(doc_count) docs FROM coverage GROUP BY code, source, status ORDER BY code, source, status"
+        ):
+            log(f"  {r['code']} {r['source']:<16} {r['status']:<10} {r['days']:>4}일  "
+                f"{r['mn']} ~ {r['mx']}  ({r['docs']:,}건)")
+        log("\n=== 문서 / 채점 ===")
+        for r in conn.execute(
+            "SELECT code, COUNT(*) n, SUM(label IS NOT NULL) labeled, SUM(is_canonical=0) dup "
+            "FROM documents GROUP BY code"
+        ):
+            log(f"  {r['code']}  총 {r['n']:,}  채점 {r['labeled']:,}  중복강등 {r['dup']:,}")
+        log("\n=== 최근 실행 ===")
+        for r in conn.execute(
+            "SELECT run_id, stage, code, status, started_utc, finished_utc, stats_json "
+            "FROM pipeline_runs ORDER BY started_utc DESC LIMIT 8"
+        ):
+            log(f"  {r['started_utc']}  {r['stage']:<8} {r['code'] or '-':<8} {r['status']:<8} "
+                f"{(r['stats_json'] or '')[:90]}")
+
+
+def _run(stage: str, args, log, fn):
+    with get_conn() as conn:
+        with RunLogger(conn, stage, args.code) as run:
+            log(f"=== [{stage}] {args.code} 시작 (run_id={run.run_id}) ===")
+            stats = fn(conn)
+            run.finish(stats)
+            log(f"=== [{stage}] 완료: {stats} ===")
+            if stats.get("hit_page_cap"):
+                log("  [경고] max_pages 상한 도달 — 요청 기간을 다 못 채웠다. "
+                    "coverage가 partial로 남으니 --max-pages를 올려 재실행하라.")
+    return stats
+
+
+def cmd_board(args, log):
+    stats = _run("board", args, log, lambda conn: naver_board.crawl(
+        conn, args.code, days_back=args.days, max_pages=args.max_pages,
+        force=args.force, progress=log))
+    with get_conn() as conn:
+        refresh_sentiment_daily(conn, args.code)
+
+
+def cmd_news(args, log):
+    _run("news", args, log, lambda conn: naver_news.crawl(
+        conn, args.code, days_back=args.days, max_pages=args.max_pages, progress=log))
+    with get_conn() as conn:
+        refresh_sentiment_daily(conn, args.code)
+
+
+def cmd_prices(args, log):
+    with get_conn() as conn:
+        n = price.collect_prices(conn, args.code, years=args.years)
+    log(f"[prices] {args.code}: {n:,}행")
+
+
+def cmd_master(args, log):
+    with get_conn() as conn:
+        n = price.sync_kospi_master(conn)
+    log(f"[master] KOSPI 종목 {n:,}건 동기화")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="수집 전용 실행기")
+    ap.add_argument("--log", type=Path, default=None, help="로그 파일 경로(백그라운드 실행용)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("status", help="수집 원장/실행 이력 조회")
+    sub.add_parser("master", help="KOSPI 종목마스터 동기화")
+
+    p = sub.add_parser("prices", help="가격 수집")
+    p.add_argument("code")
+    p.add_argument("--years", type=int, default=3)
+
+    for name, default_pages in (("news", 5000), ("board", 3000)):
+        q = sub.add_parser(name, help=f"{name} 수집")
+        q.add_argument("code")
+        q.add_argument("--days", type=int, default=30)
+        q.add_argument("--max-pages", type=int, default=default_pages)
+        q.add_argument("--force", action="store_true", help="coverage completed 날짜도 재수집")
+
+    args = ap.parse_args()
+    if not hasattr(args, "code"):
+        args.code = None
+    log = Tee(args.log)
+    init_db()
+    {"status": cmd_status, "master": cmd_master, "prices": cmd_prices,
+     "news": cmd_news, "board": cmd_board}[args.cmd](args, log)
+
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    main()

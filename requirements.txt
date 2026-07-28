@@ -1,0 +1,15 @@
+pandas
+numpy
+scikit-learn
+requests
+beautifulsoup4
+lxml
+python-dotenv
+joblib
+tqdm
+pykrx
+FinanceDataReader
+openai
+rapidfuzz
+fastapi
+uvicorn[standard]
