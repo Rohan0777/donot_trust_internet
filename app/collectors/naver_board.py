@@ -130,6 +130,19 @@ def crawl(conn, code: str, days_back: int = 30, max_pages: int = 3000,
     groups, demoted = mark_duplicates(conn, code, seen_dates)
     conn.commit()
 
+    # 종료 사유를 구분해서 남긴다. 셋은 의미가 전혀 다르다:
+    #   cutoff       - 요청한 기간을 다 채웠다 (정상)
+    #   page_cap     - max_pages에 걸렸다 (상한을 올리면 더 받는다)
+    #   board_end    - 게시판이 더는 페이지를 주지 않는다 (상한을 올려도 소용없다)
+    # 대형주는 board_end가 흔하다. SK하이닉스는 1,001페이지에서 소진되는데
+    # 하루 게시량이 2만 건이라 그래봐야 1.5일치다 — 종토방 장기 백필은 불가능하다.
+    if reached_cutoff:
+        stopped = "cutoff"
+    elif last_page >= max_pages:
+        stopped = "page_cap"
+    else:
+        stopped = "board_end"
+
     return {"saved": total_saved, "pages": last_page, "dates": len(seen_dates),
             "oldest": boundary, "dup_groups": groups, "dup_demoted": demoted,
-            "hit_page_cap": not reached_cutoff and last_page >= max_pages}
+            "stopped": stopped, "hit_page_cap": stopped == "page_cap"}

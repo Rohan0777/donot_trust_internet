@@ -67,9 +67,12 @@ def _run(stage: str, args, log, fn):
             stats = fn(conn)
             run.finish(stats)
             log(f"=== [{stage}] 완료: {stats} ===")
-            if stats.get("hit_page_cap"):
-                log("  [경고] max_pages 상한 도달 — 요청 기간을 다 못 채웠다. "
-                    "coverage가 partial로 남으니 --max-pages를 올려 재실행하라.")
+            reason = stats.get("stopped")
+            if reason == "page_cap":
+                log("  [경고] max_pages 상한 도달 — --max-pages를 올려 재실행하면 더 받는다.")
+            elif reason == "board_end":
+                log(f"  [경고] 게시판 페이지 소진({stats.get('pages')}p) — 상한을 올려도 더는 못 받는다. "
+                    f"확보 구간은 {stats.get('oldest')} 이후뿐이며, coverage에 partial로 남는다.")
     return stats
 
 
