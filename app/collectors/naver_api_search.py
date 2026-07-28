@@ -33,6 +33,9 @@ from app.db.dao import (
     upsert_coverage,
 )
 
+from app.collectors.google_news_rss import _excluded as _excludes
+from app.collectors.google_news_rss import _is_offtopic as is_offtopic
+
 API_BASE = "https://openapi.naver.com/v1/search/{endpoint}.json"
 DISPLAY, MAX_START, DELAY = 100, 1000, 0.1
 _TAG_RE = re.compile(r"</?b>")
@@ -67,7 +70,8 @@ def _search(endpoint: str, query: str, start: int) -> list[dict]:
 
 def crawl_daily(conn, code: str, name: str, days_back: int = 1, cafe_max: int = 300) -> dict:
     collected = now_utc()
-    aliases = stock_aliases(conn, code)
+    aliases = stock_aliases(conn, code) or (name,)
+    excludes = _excludes(conn, code)
     cutoff = datetime.now().astimezone() - timedelta(days=days_back)
     dates: set[str] = set()
     saved = {"news": 0, "cafe": 0}
@@ -88,6 +92,11 @@ def crawl_daily(conn, code: str, name: str, days_back: int = 1, cafe_max: int = 
             if pub and pub < cutoff:
                 reached = True
                 continue
+            title_raw = _clean(it.get("title", ""))
+            # 검색 API는 본문 매칭으로 종목과 무관한 기사를 대량으로 돌려준다
+            # (레거시 데이터에서 무관 판정 520건 중 506건이 제목에 종목명조차 없었다).
+            if is_offtopic(title_raw, aliases, excludes):
+                continue
             url = it.get("link") or it.get("originallink")
             if not url or url in seen:
                 continue
@@ -99,7 +108,7 @@ def crawl_daily(conn, code: str, name: str, days_back: int = 1, cafe_max: int = 
             if pub_utc:
                 dates.add(pub_utc[:10])
             batch.append({
-                "url": url, "title": _clean(it.get("title", "")),
+                "url": url, "title": title_raw,
                 "body": _clean(it.get("description", "")) or None,
                 "published_utc": pub_utc, "collected_utc": collected,
                 "media_id": resolve_media_id(conn, press, "news"),
