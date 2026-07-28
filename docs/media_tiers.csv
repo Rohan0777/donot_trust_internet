@@ -1,0 +1,107 @@
+tier,canonical,aliases
+# 매체 등급 기준 (기존 큐레이션을 그대로 보존하고 신규만 추가)
+#   major  : 전통 3대 종합일간지
+#   daily  : 신문 발행 / 지상파 / 통신사 / 종편·보도채널 / 지역일간지
+#   online : 인터넷 전용 매체, 경제·IT 전문지, 주간지
+# aliases 는 파이프(|) 구분. 한글 매체명과 등록도메인을 같은 행에 두면 하나로 병합된다.
+#
+# --- major ---
+major,조선일보,조선일보|chosun.com
+major,중앙일보,중앙일보|joongang.co.kr
+major,동아일보,동아일보|donga.com
+#
+# --- daily ---
+daily,연합뉴스,연합뉴스|yna.co.kr
+daily,연합뉴스TV,연합뉴스TV|yonhapnewstv.co.kr
+daily,뉴스1,뉴스1|news1.kr
+daily,뉴시스,뉴시스|newsis.com
+daily,매일경제,매일경제|mk.co.kr
+daily,한국경제,한국경제|hankyung.com
+daily,한국경제TV,한국경제TV|wowtv.co.kr
+daily,한국일보,한국일보|hankookilbo.com|hankooki.com
+daily,한겨레,한겨레|hani.co.kr
+daily,경향신문,경향신문|khan.co.kr
+daily,서울신문,서울신문|seoul.co.kr
+daily,국민일보,국민일보|kmib.co.kr
+daily,문화일보,문화일보|munhwa.com
+daily,세계일보,세계일보|segye.com
+daily,서울경제,서울경제|sedaily.com
+daily,헤럴드경제,헤럴드경제|heraldcorp.com
+daily,이데일리,이데일리|edaily.co.kr
+daily,파이낸셜뉴스,파이낸셜뉴스|fnnews.com
+daily,조선비즈,조선비즈
+daily,KBS,KBS|kbs.co.kr
+daily,MBC,MBC|imbc.com
+daily,SBS,SBS|sbs.co.kr
+daily,SBS Biz,SBS Biz|sbsbiz.co.kr
+daily,YTN,YTN|ytn.co.kr
+daily,JTBC,JTBC|jtbc.co.kr
+daily,TV조선,TV조선|tvchosun.com
+daily,채널A,채널A|ichannela.com
+daily,MBN,MBN|mbn.co.kr
+daily,연합인포맥스,einfomax.co.kr
+daily,부산일보,부산일보|busan.com
+daily,국제신문,국제신문|kookje.co.kr
+daily,강원도민일보,강원도민일보|kado.net
+daily,에너지경제,ekn.kr
+#
+# --- online ---
+online,머니투데이,머니투데이|mt.co.kr
+online,머니투데이방송,mtn.co.kr
+online,아시아경제,아시아경제|asiae.co.kr
+online,전자신문,전자신문|etnews.com
+online,디지털타임스,디지털타임스|dt.co.kr
+online,디지털데일리,디지털데일리|ddaily.co.kr
+online,노컷뉴스,노컷뉴스|nocutnews.co.kr
+online,더팩트,더팩트|tf.co.kr
+online,아이뉴스24,아이뉴스24|inews24.com
+online,비즈워치,비즈워치|bizwatch.co.kr
+online,지디넷코리아,지디넷코리아|zdnet.co.kr
+online,이코노미스트,이코노미스트|economist.co.kr
+online,시사저널,시사저널|sisajournal.com
+online,매경이코노미,매경이코노미
+online,한경비즈니스,한경비즈니스
+online,주간조선,주간조선
+online,매일신문,매일신문|imaeil.com
+online,아주경제,ajunews.com
+online,이투데이,etoday.co.kr
+online,글로벌이코노믹,g-enews.com
+online,뉴데일리,newdaily.co.kr
+online,뉴스핌,newspim.com
+online,아시아투데이,asiatoday.co.kr
+online,EBN,ebn.co.kr
+online,메트로신문,metroseoul.co.kr
+online,핀포인트뉴스,pinpointnews.co.kr
+online,비즈니스포스트,businesspost.co.kr
+online,데일리안,데일리안|dailian.co.kr
+online,동행미디어 시대,동행미디어 시대|sidae.com
+online,블로터,블로터|bloter.net
+online,조세일보,조세일보|joseilbo.com
+online,마이데일리,마이데일리|mydaily.co.kr
+online,매일일보,m-i.kr
+online,서울경제TV,sentv.co.kr
+online,토큰포스트,tokenpost.kr
+online,뉴스웨이,newsway.co.kr
+online,오피니언뉴스,opinionnews.co.kr
+online,브릿지경제,viva100.com
+online,아시아타임즈,asiatime.co.kr
+online,국제뉴스,gukjenews.com
+online,뉴스투데이,news2day.co.kr
+online,뉴스웍스,newsworks.co.kr
+online,톱스타뉴스,topstarnews.net
+online,이코노믹리뷰,econovill.com
+online,위키트리,wikitree.co.kr
+online,뉴스토마토,newstomato.com
+online,서울파이낸스,seoulfn.com
+online,더퍼블릭,thepublic.kr
+# 아래는 매체명을 확인하지 못해 도메인을 그대로 canonical로 둔다.
+# 전부 저빈도 인터넷 매체라 online으로 분류했다 — 확인되면 canonical을 채울 것.
+online,joongangenews.com,joongangenews.com
+online,ziksir.com,ziksir.com
+online,pointdaily.co.kr,pointdaily.co.kr
+online,seouleconews.com,seouleconews.com
+online,delighti.co.kr,delighti.co.kr
+online,industrynews.co.kr,industrynews.co.kr
+online,smartbizn.com,smartbizn.com
+online,the-biz.co.kr,the-biz.co.kr
+online,ikbc.co.kr,ikbc.co.kr
