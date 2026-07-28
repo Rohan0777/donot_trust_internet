@@ -15,7 +15,7 @@ daily,연합뉴스,연합뉴스|yna.co.kr
 daily,연합뉴스TV,연합뉴스TV|yonhapnewstv.co.kr
 daily,뉴스1,뉴스1|news1.kr
 daily,뉴시스,뉴시스|newsis.com
-daily,매일경제,매일경제|mk.co.kr
+daily,매일경제,매일경제|매일경제 마켓|mk.co.kr
 daily,한국경제,한국경제|hankyung.com
 daily,한국경제TV,한국경제TV|wowtv.co.kr
 daily,한국일보,한국일보|hankookilbo.com|hankooki.com
@@ -29,10 +29,10 @@ daily,서울경제,서울경제|sedaily.com
 daily,헤럴드경제,헤럴드경제|heraldcorp.com
 daily,이데일리,이데일리|edaily.co.kr
 daily,파이낸셜뉴스,파이낸셜뉴스|fnnews.com
-daily,조선비즈,조선비즈
-daily,KBS,KBS|kbs.co.kr
-daily,MBC,MBC|imbc.com
-daily,SBS,SBS|sbs.co.kr
+daily,조선비즈,조선비즈|Chosunbiz|biz.chosun.com
+daily,KBS,KBS|KBS 뉴스|kbs.co.kr
+daily,MBC,MBC|MBC 뉴스|imbc.com
+daily,SBS,SBS|SBS 뉴스|sbs.co.kr
 daily,SBS Biz,SBS Biz|sbsbiz.co.kr
 daily,YTN,YTN|ytn.co.kr
 daily,JTBC,JTBC|jtbc.co.kr
@@ -43,11 +43,11 @@ daily,연합인포맥스,einfomax.co.kr
 daily,부산일보,부산일보|busan.com
 daily,국제신문,국제신문|kookje.co.kr
 daily,강원도민일보,강원도민일보|kado.net
-daily,에너지경제,ekn.kr
+daily,에너지경제,에너지경제|에너지경제신문|ekn.kr
 #
 # --- online ---
 online,머니투데이,머니투데이|mt.co.kr
-online,머니투데이방송,mtn.co.kr
+online,머니투데이방송,머니투데이방송|MTN 머니투데이방송|mtn.co.kr
 online,아시아경제,아시아경제|asiae.co.kr
 online,전자신문,전자신문|etnews.com
 online,디지털타임스,디지털타임스|dt.co.kr
@@ -58,7 +58,7 @@ online,아이뉴스24,아이뉴스24|inews24.com
 online,비즈워치,비즈워치|bizwatch.co.kr
 online,지디넷코리아,지디넷코리아|zdnet.co.kr
 online,이코노미스트,이코노미스트|economist.co.kr
-online,시사저널,시사저널|sisajournal.com
+online,시사저널,시사저널|시사저널e|sisajournal.com
 online,매경이코노미,매경이코노미
 online,한경비즈니스,한경비즈니스
 online,주간조선,주간조선
@@ -89,7 +89,7 @@ online,국제뉴스,gukjenews.com
 online,뉴스투데이,news2day.co.kr
 online,뉴스웍스,newsworks.co.kr
 online,톱스타뉴스,topstarnews.net
-online,이코노믹리뷰,econovill.com
+online,이코노믹리뷰,이코노믹리뷰|ER 이코노믹리뷰|econovill.com
 online,위키트리,wikitree.co.kr
 online,뉴스토마토,newstomato.com
 online,서울파이낸스,seoulfn.com
@@ -99,9 +99,64 @@ online,더퍼블릭,thepublic.kr
 online,joongangenews.com,joongangenews.com
 online,ziksir.com,ziksir.com
 online,pointdaily.co.kr,pointdaily.co.kr
-online,seouleconews.com,seouleconews.com
+online,서울이코노미뉴스,서울이코노미뉴스|seouleconews.com
 online,delighti.co.kr,delighti.co.kr
 online,industrynews.co.kr,industrynews.co.kr
 online,smartbizn.com,smartbizn.com
 online,the-biz.co.kr,the-biz.co.kr
 online,ikbc.co.kr,ikbc.co.kr
+#
+# --- Google News RSS 유입분 (2차 확장) ---
+# 포털/블로그/기업 자체 채널은 언론사가 아니므로 blog 등급(가중치 0.01)으로 격리한다.
+blog,네이트,네이트
+blog,네이버 프리미엄콘텐츠,네이버 프리미엄콘텐츠
+blog,네이버 블로그(뉴스),Naver Blog
+blog,브런치,브런치
+blog,카카오 뉴스룸,카카오|kakaocorp.com|kakaoent.com
+blog,뉴닉,뉴닉
+blog,KB Think,KB Think
+# 포털 집계 링크는 원 매체를 알 수 없다. 기사 자체는 정식 보도이므로 online으로 둔다.
+online,다음뉴스(집계),v.daum.net
+#
+daily,대한경제,대한경제
+daily,농민신문,농민신문
+daily,경기일보,경기일보
+daily,대전일보,대전일보
+daily,금강일보,금강일보
+daily,중부매일,중부매일
+daily,신아일보,신아일보
+daily,경기신문,경기신문
+daily,BBS불교방송,BBS불교방송
+daily,kbc광주방송,kbc광주방송
+daily,한국금융신문,한국금융신문
+online,디일렉,디일렉|thelec.kr
+online,IT조선,IT조선|it.chosun.com
+online,한경매거진&북,한경매거진&북
+online,주간동아,주간동아
+online,인베스트조선,인베스트조선
+online,마켓인,마켓인
+online,딜사이트,딜사이트|DealSite경제TV
+online,Investing.com 한국어,Investing.com 한국어
+online,녹색경제신문,녹색경제신문
+online,디지털투데이,디지털투데이
+online,AI타임스,AI타임스
+online,자본시장뉴스,자본시장뉴스
+online,테크월드,테크월드
+online,더구루,더구루
+online,스트레이트뉴스,스트레이트뉴스
+online,인더스트리뉴스,인더스트리뉴스|industrynews.co.kr
+online,CEO스코어데일리,CEO스코어데일리
+online,파이낸셜포스트,파이낸셜포스트|financialpost.co.kr
+online,인포스탁데일리,인포스탁데일리
+online,TradingKey,TradingKey
+online,PRESS9,PRESS9
+online,테크M,테크M
+online,중소기업신문,중소기업신문
+online,블루밍비트,블루밍비트
+online,뉴시안,뉴시안
+online,알파경제,알파경제
+online,오마이뉴스,오마이뉴스
+online,위키리크스한국,위키리크스한국
+online,뉴스스페이스,뉴스스페이스
+online,스포츠서울,스포츠서울
+online,2news.co.kr,2news.co.kr
