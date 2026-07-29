@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+# 일별 문서량이 중앙값의 이 배수를 넘으면 수집 불균형으로 경고한다.
+IMBALANCE_RATIO = 20
+
 DIRECTIONS = ("forward", "contrarian")
 POSITION_LIMITS = ("long_only", "unlimited")
 
@@ -156,6 +159,19 @@ def run_backtest(conn, code: str, weights: dict[str, float], *,
     peak_short = max((abs(e) for e, p in zip(out.equity, out.position) if p < 0), default=0.0)
     peak_capital = max(peak_cash_need, peak_short, 1.0)
 
+    # 수집 불균형 경고: 특정 날짜의 문서량이 중앙값 대비 과도하면 그 하루가
+    # 곡선 전체를 지배한다. 실측 000660은 종토방 1,001페이지가 전부 이틀에 몰려
+    # 한 날짜가 중앙값의 527배였다. 전략 성과로 오독되지 않도록 표면에 드러낸다.
+    counts = merged.groupby("kst_date")["doc_cnt"].sum()
+    imbalance = []
+    if len(counts) > 3:
+        median = float(counts.median()) or 1.0
+        for d, n in counts.items():
+            if n / median >= IMBALANCE_RATIO:
+                imbalance.append({"date": d.strftime("%Y-%m-%d"),
+                                  "docs": int(n), "x_median": round(n / median)})
+        imbalance.sort(key=lambda r: -r["docs"])
+
     net_final = out.net_pnl[-1] if out.net_pnl else 0.0
     running_max, mdd = float("-inf"), 0.0
     for v in out.net_pnl:
@@ -184,5 +200,7 @@ def run_backtest(conn, code: str, weights: dict[str, float], *,
         "direction": direction,
         "position_limit": position_limit,
         "fees_enabled": fees_enabled,
+        "imbalance": imbalance[:5],
+        "median_docs_per_day": int(counts.median()) if len(counts) else 0,
     }
     return out

@@ -29,7 +29,6 @@ PROMPT_VERSION = "v3"
 
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
-BIGKINDS_API_KEY = os.environ.get("BIGKINDS_API_KEY", "")
 
 # --- 매체 등급 기본 가중치 (런타임 파라미터 — 조회 시점에 덮어쓸 수 있다) ---
 DEFAULT_TIER_WEIGHTS = {
@@ -38,7 +37,12 @@ DEFAULT_TIER_WEIGHTS = {
     "online": 1.0,
     "unknown": 1.0,
     "blog": 0.05,
-    "community": 0.001,
+    # 종목토론방 기본 가중치 0. 데이터가 없어서가 아니라 커버리지가 불균형해서다.
+    # 대형주는 하루 2만 건이 올라오는데 게시판 페이지네이션이 1,001p에서 끊긴다
+    # (실측 SK하이닉스: 19,279건 = 1.5일치). 뉴스는 180일을 덮는데 커뮤니티는
+    # 이틀뿐이라, 켜두면 그 이틀이 6개월 곡선 전체를 좌우한다.
+    # 균형 잡힌 커뮤니티 소스를 확보하기 전까지는 사용자가 명시적으로 켜야 한다.
+    "community": 0.0,
 }
 
 # --- 감성 집계 윈도우 ---

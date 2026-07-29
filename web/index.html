@@ -130,6 +130,12 @@ footer{color:var(--tx3);font-size:11.5px;padding:18px 4px;line-height:1.7}
     <span class="hint">1점 = 1주 · <b id="pointValue">–</b> · 긍정 건수 − 부정 건수에 곱해집니다</span>
   </div>
   <div class="wgrid" id="weights"></div>
+  <div class="hint" style="margin-top:8px">
+    종목토론방 기본값이 <b>0</b>인 이유 — 데이터가 없어서가 아니라 <b>수집 구간이 불균형</b>해서입니다.
+    대형주는 하루 2만 건이 올라오는데 게시판 페이지네이션이 1,001페이지에서 끊겨
+    1.5일치밖에 못 받습니다. 뉴스는 180일을 덮으므로, 켜두면 그 이틀이 6개월 곡선을 좌우합니다.
+    직접 올려서 확인해 보실 수 있습니다.
+  </div>
   <div class="notice" id="mapWarn" style="display:none"></div>
 </div>
 
@@ -144,6 +150,7 @@ footer{color:var(--tx3);font-size:11.5px;padding:18px 4px;line-height:1.7}
     </div>
     <canvas id="c2"></canvas>
   </div>
+  <div class="notice" id="imbalanceWarn" style="display:none"></div>
   <div class="stats" id="stats"></div>
 </div>
 
@@ -162,7 +169,7 @@ const TIERS = [
   {k:'online',    n:'인터넷 언론',   d:0.05},
   {k:'unknown',   n:'미분류',        d:1.0, alert:true},
   {k:'blog',      n:'블로그',        d:0.01},
-  {k:'community', n:'커뮤니티',      d:0.001},
+  {k:'community', n:'커뮤니티',      d:0.0, note:'커버리지 불균형'},
 ];
 const TIER_KO = {major:'주요 언론사',daily:'일간지',online:'인터넷 언론',
                  unknown:'미분류',blog:'블로그',community:'커뮤니티'};
@@ -213,7 +220,7 @@ function segment(id, key, cb){
 function buildWeights(){
   $('#weights').innerHTML = TIERS.map(t => `
     <div class="wcell ${t.alert?'alert':''}">
-      <span class="wname">${t.n}${t.alert?'<span class="badge" id="unkBadge">–</span>':''}</span>
+      <span class="wname">${t.n}${t.alert?'<span class="badge" id="unkBadge">–</span>':''}${t.note?`<span class="badge" style="background:#334155;color:#94a3b8">${t.note}</span>`:''}</span>
       <input type="number" step="0.001" min="0" max="1000" value="${t.d}" data-k="${t.k}">
     </div>`).join('');
   $('#weights').addEventListener('input', e => {
@@ -313,6 +320,16 @@ async function loadBacktest(){
   $('#heroPct').textContent = (up?'+':'−') + Math.abs(s.real_return_pct).toFixed(2) + '%';
   $('#heroSub').textContent =
     `순손익 ${sign(s.net_pnl)}원 · 최대 소요자본 ${s.peak_capital.toLocaleString()}원`;
+
+  const imb = s.imbalance || [];
+  const iw = $('#imbalanceWarn');
+  if (imb.length) {
+    iw.style.display = 'block';
+    iw.innerHTML = '⚠ <b>수집 불균형</b> — 아래 날짜의 문서량이 평소(중앙값 ' +
+      (s.median_docs_per_day||0).toLocaleString() + '건/일)보다 극단적으로 많습니다. ' +
+      '해당 하루가 곡선 전체를 좌우하므로 전략 성과로 읽지 마십시오.<br>' +
+      imb.map(x => `· ${x.date} <b>${x.docs.toLocaleString()}건</b> (중앙값의 ${x.x_median}배)`).join('<br>');
+  } else iw.style.display = 'none';
 
   $('#stats').innerHTML = [
     ['순손익',        sign(s.net_pnl)+'원',                 up?'up':'down'],
