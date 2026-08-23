@@ -222,6 +222,20 @@ python -m scripts.collect biz                               # 4chan /biz/ (crypt
 않으므로 놓친 날은 되돌릴 수 없다.** 다른 소스는 며칠 놓쳐도 소급 수집이 되지만
 이것만은 예외다.
 
+### 매일 자동 수집
+
+```powershell
+python -m scripts.daily                  # 수집 + 채점 + 집계 한 번에
+python -m scripts.daily --catchup 14     # 놓친 날짜까지 소급
+
+# 스케줄러 등록 (매일 09:10 / 21:10)
+powershell -ExecutionPolicy Bypass -File scripts\install_schedule.ps1
+```
+
+`coverage`에서 결손 날짜를 찾아 소급하므로 노트북이 며칠 꺼져 있어도 복구된다.
+**4chan만 예외** — 소급 경로가 없어 놓친 날은 영구 손실이다. 하루 2회 도는 이유가
+이것이다.
+
 ### 후처리 / 유지보수
 
 ```powershell
