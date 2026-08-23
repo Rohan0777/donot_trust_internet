@@ -40,6 +40,8 @@ def main():
     ap.add_argument("--since-days", type=int, default=None)
     ap.add_argument("--channel", choices=["news", "community", "cafe", "blog"], default=None)
     ap.add_argument("--keep-body", action="store_true", help="채점 후 원문을 지우지 않는다(디버깅용)")
+    ap.add_argument("--daily-cap", type=int, default=200,
+                    help="(종목,일)당 채점 상한. 0이면 전수. 기본 200 — 실측 오차 0.037")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--log", type=Path, default=None)
     args = ap.parse_args()
@@ -67,7 +69,8 @@ def main():
         with RunLogger(conn, "score", args.code) as run:
             st = score_pending(conn, args.code, name, limit=args.limit,
                                since_days=args.since_days, channel=args.channel,
-                               purge_body=not args.keep_body, progress=log)
+                               purge_body=not args.keep_body,
+                               daily_cap=args.daily_cap or None, progress=log)
             payload = {"scored": st.scored, "irrelevant": st.relevant_false,
                        "missing": st.missing, "failed": st.failed, "batches": st.batches,
                        "retries": st.retries, "inherited": st.inherited, "labels": st.by_label}
