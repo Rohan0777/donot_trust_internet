@@ -29,6 +29,10 @@ BATCH_SIZE = 15
 # (실측 1.6 -> 49.4건/초, 16워커에서 31배). SQLite는 단일 writer이므로
 # 호출만 병렬로 하고 DB 반영은 메인 스레드에서 직렬로 처리한다.
 MAX_WORKERS = 12
+# 커뮤니티 글의 최소 반응(조회수). 이 미만은 아무도 읽지 않은 글이므로 "여론"으로 치지
+# 않는다. 상한에 걸린 날만 반응순으로 자르면 표본 규칙이 날짜마다 달라져 지수에
+# 계단이 생기므로, 모든 날에 같은 하한을 적용한다.
+COMMUNITY_MIN_ENGAGEMENT = 20
 MAX_BODY_CHARS = 600
 REQUEST_TIMEOUT = 60.0
 MAX_ATTEMPTS = 3
@@ -55,8 +59,17 @@ def _pending(conn, code: str, limit: int | None, since_days: int | None, channel
     극성지수 오차가 0.037(범위 -1~+1)이다. 200건을 넘는 (종목,일)은 5.8%뿐이지만
     그 소수에 문서가 극단적으로 몰려 있어(최대 11,311건/일) 채점량은 49% 줄어든다.
 
-    표본은 매체 등급이 높은 순 -> 확산도 큰 순으로 고른다. 무작위 표본보다
-    그날의 논조를 대표하고, 상한에 걸린 날에도 주요 언론이 누락되지 않는다.
+    표본 기준은 채널에 따라 다르다:
+      뉴스      - 매체 등급 순 (major -> daily -> online ...)
+      커뮤니티  - 반응 순 (조회수/추천). 아무도 안 읽은 글은 "여론"이 아니다.
+
+    [주의: 표본 규칙이 날짜마다 달라지면 지수에 인공적 단절이 생긴다]
+    상한에 걸린 날은 "반응 상위 200건", 안 걸린 날은 "그날 전부"가 된다. 두 집단은
+    성격이 다르므로(전자는 합의된 의견, 후자는 혼잣말 포함) 물량이 상한을 넘나드는
+    구간에서 지수가 계단처럼 튄다. 백테스트는 이 계단을 신호로 학습한다.
+
+    그래서 커뮤니티는 상한 미만인 날에도 동일한 반응 하한을 적용한다
+    (COMMUNITY_MIN_ENGAGEMENT). 모든 날에 같은 규칙이 걸리므로 단절이 없다.
     """
     sql = (
         "SELECT d.doc_id, d.title, m.channel, r.body FROM documents d "
@@ -72,15 +85,25 @@ def _pending(conn, code: str, limit: int | None, since_days: int | None, channel
         sql += "AND d.published_utc >= datetime('now', ?) "
         params.append(f"-{int(since_days)} days")
 
+    # 커뮤니티는 반응 하한을 모든 날에 동일하게 적용한다(위 주석 참조).
+    # engagement가 NULL인 건 구버전 수집분이라 하한을 적용하지 않는다.
+    sql += ("AND (m.channel NOT IN ('community','cafe') OR d.engagement IS NULL "
+            f"     OR d.engagement >= {int(COMMUNITY_MIN_ENGAGEMENT)}) ")
+
     if daily_cap:
+        # 뉴스는 매체 등급 순, 커뮤니티는 반응 순으로 상위 N건을 남긴다.
+        order = (
+            "  PARTITION BY d.published_kst_date ORDER BY "
+            "    CASE WHEN m.channel IN ('community','cafe') THEN 1 ELSE 0 END, "
+            "    CASE WHEN m.channel IN ('community','cafe') THEN NULL ELSE "
+            "      CASE m.tier WHEN 'major' THEN 0 WHEN 'daily' THEN 1 WHEN 'online' THEN 2 "
+            "                  WHEN 'unknown' THEN 3 WHEN 'blog' THEN 4 ELSE 5 END END, "
+            "    COALESCE(d.engagement, -1) DESC, d.doc_id"
+        )
         sql = (
             "SELECT doc_id, title, channel, body FROM (" + sql.replace(
                 "SELECT d.doc_id, d.title, m.channel, r.body",
-                "SELECT d.doc_id, d.title, m.channel, r.body, ROW_NUMBER() OVER ("
-                "  PARTITION BY d.published_kst_date ORDER BY "
-                "    CASE m.tier WHEN 'major' THEN 0 WHEN 'daily' THEN 1 WHEN 'online' THEN 2 "
-                "                WHEN 'unknown' THEN 3 WHEN 'blog' THEN 4 ELSE 5 END, "
-                "    d.doc_id) rn"
+                "SELECT d.doc_id, d.title, m.channel, r.body, ROW_NUMBER() OVER (" + order + ") rn"
             ) + ") WHERE rn <= ? ORDER BY doc_id DESC"
         )
         params.append(int(daily_cap))

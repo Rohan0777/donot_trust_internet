@@ -83,11 +83,13 @@ def insert_documents(conn, code: str, source: str, items: list[dict], aliases: t
         cur = conn.execute(
             "INSERT OR IGNORE INTO documents"
             "(code, media_id, source, url, title, norm_title, title_hash, body_hash, simhash, author,"
+            " engagement, endorse_up, endorse_down,"
             " published_utc, published_kst_date, collected_utc, ts_confidence) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 code, it["media_id"], source, it.get("url"), title, norm,
                 title_hash(norm), body_hash(it.get("body")), simhash64(norm), it.get("author"),
+                it.get("engagement"), it.get("endorse_up"), it.get("endorse_down"),
                 pub, kst_date_of(pub or collected), collected,
                 it.get("ts_confidence", "exact" if pub else "approx"),
             ),

@@ -88,6 +88,15 @@ CREATE TABLE IF NOT EXISTS documents (
     simhash           INTEGER,
     author            TEXT,
 
+    -- 반응 지표. 소스마다 의미가 다르므로 수집기가 무엇을 넣었는지 명확히 한다:
+    --   naver_board : engagement=조회수, up=추천, down=비추천
+    --   4chan       : engagement=댓글수, up/down=NULL (추천 개념 없음)
+    --   뉴스        : 전부 NULL
+    -- 커뮤니티 표본을 "많이 읽힌/공감받은 글" 기준으로 자르는 데 쓴다.
+    engagement        INTEGER,
+    endorse_up        INTEGER,
+    endorse_down      INTEGER,
+
     published_utc     TEXT,
     -- 조회/집계 최적화용 파생 컬럼. published_utc를 KST로 변환한 날짜.
     published_kst_date TEXT,
@@ -118,6 +127,8 @@ CREATE INDEX IF NOT EXISTS idx_doc_dedup      ON documents(code, published_kst_d
 CREATE INDEX IF NOT EXISTS idx_doc_simhash    ON documents(code, published_kst_date, simhash);
 CREATE INDEX IF NOT EXISTS idx_doc_pending    ON documents(code, label) WHERE label IS NULL;
 CREATE INDEX IF NOT EXISTS idx_doc_author     ON documents(code, published_kst_date, author);
+-- 커뮤니티 표본 추출용: 날짜별로 반응 큰 순 정렬
+CREATE INDEX IF NOT EXISTS idx_doc_engagement ON documents(code, published_kst_date, engagement DESC);
 
 -- ============================================================
 -- 사전집계 (media 단위). 가중치 변경은 이 테이블의 선형결합으로 끝난다.

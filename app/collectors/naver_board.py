@@ -50,10 +50,22 @@ def _parse_page(html: str, code: str) -> list[dict]:
             published = datetime.strptime(tds[0].get_text(strip=True), "%Y.%m.%d %H:%M")
         except ValueError:
             continue
+        def _int(i):
+            if len(tds) <= i:
+                return None
+            try:
+                return int(tds[i].get_text(strip=True).replace(",", ""))
+            except ValueError:
+                return None
+
         out.append({
             "nid": href.split("nid=")[1].split("&")[0],
             "title": (a.get("title") or a.get_text(strip=True)).strip(),
             "author": tds[2].get_text(strip=True) or None,
+            # 컬럼 순서: 날짜 | 제목 | 글쓴이 | 조회 | 추천 | 비추천
+            "engagement": _int(3),
+            "endorse_up": _int(4),
+            "endorse_down": _int(5),
             "published": published,
             "url": POST_URL.format(code=code, nid=href.split("nid=")[1].split("&")[0]),
         })
@@ -103,6 +115,8 @@ def crawl(conn, code: str, days_back: int = 30, max_pages: int = 3000,
             seen.add(r["url"])
             batch.append({
                 "url": r["url"], "title": r["title"], "author": r["author"],
+                "engagement": r["engagement"], "endorse_up": r["endorse_up"],
+                "endorse_down": r["endorse_down"],
                 "published_utc": to_utc_iso(r["published"]),
                 "collected_utc": collected, "media_id": media_id, "ts_confidence": "exact",
             })
