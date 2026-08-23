@@ -268,7 +268,13 @@ python -m scripts.recover_press            # URL에서 매체 복원 (네트워�
 python -m scripts.dedup --all              # 근사중복 판정 + 도배 억제
 python -m scripts.score 035720 --dry-run   # 채점 비용 추정
 python -m scripts.score 035720 --limit 500 # LLM 채점 (OPENAI_API_KEY 필요)
+python -m scripts.healthcheck              # 파이프라인 상태 점검
 ```
+
+`healthcheck`는 조용히 잘못되기 쉬운 것만 골라 검사한다 — 시각 정규화, 인코딩
+파손, 프롬프트 버전 혼재, 매체 미분류 비중, **사전집계와 문서의 정합성**, 가격
+결손, 최근 수집일, 미채점 잔량. 각 항목은 "이게 깨지면 어떤 숫자가 거짓이 되는가"를
+기준으로 골랐다. 종료 코드는 실패 2 / 경고 1 / 정상 0이라 스케줄러에 물릴 수 있다.
 
 장시간 백필은 백그라운드로 떼어놓는다. 진행상황은 로그 파일과 `pipeline_runs`
 테이블 양쪽에 남으므로, 콘솔을 닫아도 `status`로 확인할 수 있다.
