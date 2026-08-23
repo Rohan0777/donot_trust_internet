@@ -42,7 +42,8 @@ from app.db.dao import (
 
 SOURCE = "google_rss"
 FEED = ("https://news.google.com/rss/search?q={q}+after:{start}+before:{end}"
-        "&hl=ko&gl=KR&ceid=KR%3Ako")
+        "&hl={hl}&gl={gl}&ceid={ceid}")
+DEFAULT_LOCALE = ("ko", "KR", "KR:ko")
 PAGE_CAP = 100          # 구글이 쿼리당 반환하는 상한
 REQUEST_DELAY_SEC = 1.0
 _SUFFIX_RE = re.compile(r"\s+-\s+[^-]{1,30}$")   # "제목 - 매체명" 꼬리표
@@ -52,8 +53,10 @@ def _strip_outlet(title: str) -> str:
     return _SUFFIX_RE.sub("", title or "").strip()
 
 
-def _fetch(query: str, start: str, end: str) -> list[dict]:
-    url = FEED.format(q=quote(query), start=start, end=end)
+def _fetch(query: str, start: str, end: str, locale=DEFAULT_LOCALE) -> list[dict]:
+    hl, gl, ceid = locale
+    url = FEED.format(q=quote(query), start=start, end=end,
+                      hl=hl, gl=gl, ceid=quote(ceid))
     resp = requests.get(url, headers=HTTP_HEADERS, timeout=CRAWL_TIMEOUT_SEC + 5)
     resp.raise_for_status()
     time.sleep(REQUEST_DELAY_SEC)
@@ -77,8 +80,27 @@ def _fetch(query: str, start: str, end: str) -> list[dict]:
 
 
 def _excluded(conn, code: str) -> list[str]:
-    row = conn.execute("SELECT exclude_json FROM stocks WHERE code = ?", (code,)).fetchone()
+    row = conn.execute("SELECT exclude_json FROM entities WHERE code = ?", (code,)).fetchone()
     return json.loads(row["exclude_json"]) if row and row["exclude_json"] else []
+
+
+def entity_locales(conn, code: str) -> list[tuple]:
+    row = conn.execute("SELECT locales_json FROM entities WHERE code = ?", (code,)).fetchone()
+    if not row or not row["locales_json"]:
+        return [DEFAULT_LOCALE]
+    return [tuple(x) for x in json.loads(row["locales_json"])]
+
+
+def entity_queries(conn, code: str, fallback: str) -> list[str]:
+    """검색 질의어 목록. aliases의 각 항목이 독립적인 질의가 된다.
+    시장 단위 엔티티는 '코스피|KOSPI|코스피지수'처럼 표기가 여러 개라
+    하나만 쓰면 절반을 놓친다."""
+    row = conn.execute("SELECT aliases_json FROM entities WHERE code = ?", (code,)).fetchone()
+    if row and row["aliases_json"]:
+        qs = json.loads(row["aliases_json"])
+        if qs:
+            return qs
+    return [fallback]
 
 
 def _is_offtopic(title: str, aliases: tuple[str, ...], excludes: list[str]) -> bool:
@@ -93,7 +115,8 @@ def _is_offtopic(title: str, aliases: tuple[str, ...], excludes: list[str]) -> b
 
 
 def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
-                step_days: int = 1, progress=print, adaptive: bool = True) -> dict:
+                step_days: int = 32, progress=print, adaptive: bool = True,
+                locale=None, query=None) -> dict:
     """구간을 훑어 수집한다.
 
     adaptive=True면 넓은 창으로 시작해서, 100건 상한에 걸린 창만 반으로 쪼개
@@ -105,6 +128,8 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
     excludes = _excluded(conn, code)
     collected = now_utc()
     seen = existing_urls(conn, code, SOURCE)
+    loc = locale or DEFAULT_LOCALE
+    q = query or name
 
     start = datetime.strptime(start_date, "%Y-%m-%d").date()
     end = datetime.strptime(end_date, "%Y-%m-%d").date()
@@ -116,7 +141,7 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
         """한 창을 처리한다. 상한에 걸리면 반으로 쪼개 재귀한다."""
         stats["windows"] += 1
         try:
-            items = _fetch(name, win_start.isoformat(), win_end.isoformat())
+            items = _fetch(q, win_start.isoformat(), win_end.isoformat(), loc)
         except Exception as exc:  # noqa: BLE001
             progress(f"  [경고] {win_start}~{win_end} 실패: {type(exc).__name__}: {exc}")
             for d in _days(win_start, win_end):
@@ -208,3 +233,37 @@ def _days(a, b) -> list[str]:
         out.append(cur.isoformat())
         cur += timedelta(days=1)
     return out
+
+
+def crawl_entity(conn, code: str, name: str, start_date: str, end_date: str,
+                 step_days: int = 32, progress=print, adaptive: bool = True) -> dict:
+    """엔티티의 모든 (로케일 × 질의어) 조합을 돌린다.
+
+    시장 단위 엔티티는 표기가 여러 개다 — '코스피'/'KOSPI'/'코스피지수'는 서로 다른
+    기사 집합을 반환한다. 하나만 쓰면 절반을 놓친다. 중복은 URL UNIQUE로 걸러지므로
+    질의를 겹쳐 돌려도 안전하다.
+    """
+    locales = entity_locales(conn, code)
+    queries = entity_queries(conn, code, name)
+    total = {"saved": 0, "windows": 0, "offtopic": 0, "truncated": 0,
+             "dates": 0, "splits": 0, "combos": 0}
+    dates: set[str] = set()
+
+    for loc in locales:
+        for q in queries:
+            # 한국어 질의를 영어권 로케일에 던지는 것은 의미가 없다(반대도 마찬가지).
+            is_ko_query = any("가" <= ch <= "힣" for ch in q)
+            if is_ko_query != (loc[0] == "ko"):
+                continue
+            total["combos"] += 1
+            progress(f"--- [{code}] {q!r} @ {loc[0]}")
+            st = crawl_range(conn, code, name, start_date, end_date,
+                             step_days=step_days, progress=progress,
+                             adaptive=adaptive, locale=loc, query=q)
+            for k in ("saved", "windows", "offtopic", "truncated", "splits"):
+                total[k] += st.get(k, 0)
+            dates |= {d for d in _days(
+                datetime.strptime(start_date, "%Y-%m-%d").date(),
+                datetime.strptime(end_date, "%Y-%m-%d").date() + timedelta(days=1))}
+    total["dates"] = len(dates)
+    return total

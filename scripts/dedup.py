@@ -67,7 +67,7 @@ def main():
 
     init_db()
     with get_conn() as conn:
-        codes = ([r["code"] for r in conn.execute("SELECT code FROM stocks WHERE is_kospi200 = 1")]
+        codes = ([r["code"] for r in conn.execute("SELECT code FROM entities WHERE is_active = 1")]
                  if args.all else [args.code])
         if not codes or codes == [None]:
             raise SystemExit("종목코드 또는 --all 이 필요합니다.")

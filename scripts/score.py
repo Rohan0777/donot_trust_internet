@@ -49,7 +49,7 @@ def main():
     log = Tee(args.log)
     init_db()
     with get_conn() as conn:
-        row = conn.execute("SELECT name FROM stocks WHERE code = ?", (args.code,)).fetchone()
+        row = conn.execute("SELECT name FROM entities WHERE code = ?", (args.code,)).fetchone()
         if not row:
             raise SystemExit(f"등록되지 않은 종목: {args.code}")
         name = row["name"]

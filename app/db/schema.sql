@@ -14,16 +14,27 @@ PRAGMA foreign_keys = ON;
 -- ============================================================
 -- 마스터
 -- ============================================================
-CREATE TABLE IF NOT EXISTS stocks (
+-- 관측 대상. 개별 종목뿐 아니라 지수·코인·채권까지 같은 테이블에 담는다.
+-- code는 자산군마다 형식이 다르다: 005930 / KOSPI / BTC / KTB10Y
+CREATE TABLE IF NOT EXISTS entities (
     code              TEXT PRIMARY KEY,
     name              TEXT NOT NULL,
+    -- index(지수) / equity(개별주) / crypto / bond / commodity / fx
+    kind              TEXT NOT NULL DEFAULT 'equity',
     market            TEXT,
-    is_kospi200       INTEGER NOT NULL DEFAULT 0,
+    -- 1=상시수집(매일) 2=온디맨드(사용자가 열람하면) 3=보관만
+    priority          INTEGER NOT NULL DEFAULT 2,
+    -- 거래 캘린더. 코인은 휴장일이 없어 롤포워드 규칙이 다르다.
+    --   krx / us / crypto(24x7) / none(가격 없음)
+    calendar          TEXT NOT NULL DEFAULT 'krx',
+    -- 수집 로케일. JSON 배열. 예: [["ko","KR","KR:ko"],["en-US","US","US:en"]]
+    locales_json      TEXT,
     -- 검색 별칭 / 오탐 제외어. JSON 배열 문자열.
-    -- 예: 035720 -> exclude_keywords ["카카오뱅크","카카오페이","카카오톡 오류"]
     aliases_json      TEXT,
-    exclude_json      TEXT
+    exclude_json      TEXT,
+    is_active         INTEGER NOT NULL DEFAULT 1
 );
+CREATE INDEX IF NOT EXISTS idx_entities_active ON entities(is_active, priority, kind);
 
 -- 매체 레지스트리. 뉴스뿐 아니라 종토방/카페/블로그도 각각 한 행으로 등록한다
 -- (media_id NULL인 행이 생기면 집계 키가 무너지기 때문).
@@ -118,7 +129,7 @@ CREATE TABLE IF NOT EXISTS documents (
     labeled_at        TEXT,
 
     UNIQUE(code, source, url),
-    FOREIGN KEY (code)     REFERENCES stocks(code),
+    FOREIGN KEY (code)     REFERENCES entities(code),
     FOREIGN KEY (media_id) REFERENCES media(media_id)
 );
 

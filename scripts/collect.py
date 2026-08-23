@@ -98,14 +98,14 @@ def cmd_gnews(args, log):
     end = args.end or date.today().isoformat()
     start = args.start or (date.fromisoformat(end) - timedelta(days=args.days)).isoformat()
     with get_conn() as conn:
-        row = conn.execute("SELECT name FROM stocks WHERE code = ?", (args.code,)).fetchone()
+        row = conn.execute("SELECT name FROM entities WHERE code = ?", (args.code,)).fetchone()
         if not row:
             raise SystemExit(f"등록되지 않은 종목: {args.code}")
         with RunLogger(conn, "gnews", args.code) as run:
             log(f"=== [gnews] {row['name']}({args.code}) {start} ~ {end} (창 {args.step}일) ===")
-            stats = google_news_rss.crawl_range(conn, args.code, row["name"], start, end,
-                                                step_days=args.step, progress=log,
-                                                adaptive=not args.fixed_window)
+            stats = google_news_rss.crawl_entity(conn, args.code, row["name"], start, end,
+                                                 step_days=args.step, progress=log,
+                                                 adaptive=not args.fixed_window)
             run.finish(stats)
         log(f"=== [gnews] 완료: {stats} ===")
         if stats["truncated"]:

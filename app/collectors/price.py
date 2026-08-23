@@ -39,7 +39,7 @@ def sync_kospi_master(conn) -> int:
     col = "Code" if "Code" in df.columns else "Symbol"
     rows = [(r[col], r["Name"], "KOSPI") for _, r in df.iterrows() if isinstance(r.get("Name"), str)]
     conn.executemany(
-        "INSERT INTO stocks(code, name, market) VALUES (?,?,?) "
+        "INSERT INTO entities(code, name, market) VALUES (?,?,?) "
         "ON CONFLICT(code) DO UPDATE SET name=excluded.name, market=excluded.market",
         rows,
     )

@@ -77,7 +77,7 @@ def migrate(legacy_path: Path, dry_run: bool = False):
             if row["code"] not in ALIASES:
                 continue
             dst.execute(
-                "INSERT OR REPLACE INTO stocks(code, name, market, is_kospi200, aliases_json, exclude_json) "
+                "INSERT OR REPLACE INTO entities(code, name, market, priority, aliases_json, exclude_json) "
                 "VALUES (?, ?, 'KOSPI', 1, ?, ?)",
                 (row["code"], row["name"],
                  '["' + '","'.join(ALIASES[row["code"]]) + '"]',

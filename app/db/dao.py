@@ -31,7 +31,7 @@ def kst_date_of(utc_iso: str | None) -> str | None:
 
 
 def get_stock(conn, code: str):
-    row = conn.execute("SELECT code, name, aliases_json FROM stocks WHERE code = ?", (code,)).fetchone()
+    row = conn.execute("SELECT code, name, aliases_json FROM entities WHERE code = ?", (code,)).fetchone()
     return row
 
 

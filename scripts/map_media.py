@@ -121,7 +121,7 @@ def main():
             conn.rollback()
             print("[dry-run] 롤백됨")
         else:
-            for code in [r["code"] for r in conn.execute("SELECT code FROM stocks WHERE is_kospi200 = 1")]:
+            for code in [r["code"] for r in conn.execute("SELECT code FROM entities WHERE is_active = 1")]:
                 refresh_sentiment_daily(conn, code)
         print(f"  병합된 중복 매체 {stats['merged']}곳 / 재연결 문서 {stats['docs_repointed']:,}건 / "
               f"신규 등록 {stats['created']}곳 / 등급 변경 {stats['retiered']}곳\n")

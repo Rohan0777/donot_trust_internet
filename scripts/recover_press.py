@@ -91,7 +91,7 @@ def main():
         if args.dry_run:
             conn.rollback()
         else:
-            for code in [x["code"] for x in conn.execute("SELECT code FROM stocks WHERE is_kospi200 = 1")]:
+            for code in [x["code"] for x in conn.execute("SELECT code FROM entities WHERE is_active = 1")]:
                 refresh_sentiment_daily(conn, code)
 
         print(f"oid 사전 {st['oid_dict_size']}개로 복원 시도")

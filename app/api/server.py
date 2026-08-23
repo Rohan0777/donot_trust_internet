@@ -56,7 +56,7 @@ def _parse_weights(raw: str | None) -> dict[str, float]:
 
 
 def _known_codes(conn) -> set[str]:
-    return {r["code"] for r in conn.execute("SELECT code FROM stocks")}
+    return {r["code"] for r in conn.execute("SELECT code FROM entities WHERE is_active = 1")}
 
 
 @app.get("/api/stocks")
@@ -65,7 +65,7 @@ def stocks():
         rows = conn.execute(
             "SELECT s.code, s.name, COUNT(DISTINCT d.published_kst_date) days, COUNT(d.doc_id) docs,"
             " MIN(d.published_kst_date) mn, MAX(d.published_kst_date) mx "
-            "FROM stocks s LEFT JOIN documents d ON s.code = d.code "
+            "FROM entities s LEFT JOIN documents d ON s.code = d.code "
             "GROUP BY s.code HAVING docs > 0 ORDER BY docs DESC"
         ).fetchall()
     return [dict(r) for r in rows]
