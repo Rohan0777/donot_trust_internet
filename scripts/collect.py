@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.collectors import google_news_rss, naver_board, naver_news, price
+from app.collectors import fourchan, google_news_rss, naver_board, naver_news, price
 from app.db.conn import get_conn, init_db
 from app.db.dao import RunLogger, refresh_sentiment_daily
 
@@ -114,6 +114,32 @@ def cmd_gnews(args, log):
         refresh_sentiment_daily(conn, args.code)
 
 
+def cmd_biz(args, log):
+    """4chan /biz/ 수집. 과거를 못 사는 소스이므로 매일 돌려야 한다."""
+    import json
+
+    with get_conn() as conn:
+        codes = ([args.code] if args.code else
+                 [r["code"] for r in conn.execute(
+                     "SELECT code FROM entities WHERE is_active=1 AND priority=1 AND kind='crypto'")])
+        for code in codes:
+            row = conn.execute("SELECT name, aliases_json FROM entities WHERE code=?", (code,)).fetchone()
+            if not row:
+                log(f"  [건너뜀] 등록되지 않은 엔티티: {code}")
+                continue
+            terms = tuple(json.loads(row["aliases_json"]) if row["aliases_json"] else [row["name"]])
+            # 한글 별칭은 /biz/에서 의미 없으므로 영문/기호만 남긴다.
+            terms = tuple(t for t in terms if not any("가" <= ch <= "힣" for ch in t))
+            if not terms:
+                log(f"  [건너뜀] {code}: 영문 별칭 없음")
+                continue
+            with RunLogger(conn, "biz", code) as run:
+                st = fourchan.crawl(conn, code, terms, board=args.board,
+                                    max_threads=args.max_threads, progress=log)
+                run.finish(st)
+            refresh_sentiment_daily(conn, code)
+
+
 def cmd_prices(args, log):
     with get_conn() as conn:
         n = price.collect_prices(conn, args.code, years=args.years)
@@ -138,6 +164,11 @@ def main():
     p.add_argument("code")
     p.add_argument("--years", type=int, default=3)
 
+    p_b = sub.add_parser("biz", help="4chan /biz/ 수집 (백필 불가 — 매일 실행 필요)")
+    p_b.add_argument("code", nargs="?", default=None, help="생략하면 crypto 엔티티 전체")
+    p_b.add_argument("--board", default="biz")
+    p_b.add_argument("--max-threads", type=int, default=60)
+
     p_g = sub.add_parser("gnews", help="Google News RSS 백필 (과거 구간 담당)")
     p_g.add_argument("code")
     p_g.add_argument("--days", type=int, default=90, help="end 기준 소급 일수")
@@ -160,7 +191,8 @@ def main():
     log = Tee(args.log)
     init_db()
     {"status": cmd_status, "master": cmd_master, "prices": cmd_prices,
-     "news": cmd_news, "board": cmd_board, "gnews": cmd_gnews}[args.cmd](args, log)
+     "news": cmd_news, "board": cmd_board, "gnews": cmd_gnews,
+     "biz": cmd_biz}[args.cmd](args, log)
 
 
 if __name__ == "__main__":
