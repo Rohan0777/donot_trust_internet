@@ -11,8 +11,9 @@
 ### 데이터 플로우
 
 ```
-[L0 수집]  google_news_rss(장기 백필) · naver_news 스크래핑(최근 구간)
+[L0 수집]  google_news_rss(백필·다국어) · naver_news 스크래핑(최근 구간)
            naver_search_api(일간 증분 전용) · naver_board(종토방, 커버리지 제한)
+           fourchan(/biz/, 백필 불가 — 매일 실행 필수)
              ↓ body_hash 계산 후 raw_documents에 임시 저장
 [L1 정규화] 제목 정규화 → title_hash(완전일치) → simhash(근사) → rapidfuzz 확정
              ↓ dup_group_id 부여, 대표만 is_canonical=1
@@ -178,6 +179,32 @@ delta    = max(desired, −position) | desired   # 보유수량내 | 무한공�
 비용 토글은 항상 결과를 악화시킨다 — 22거래일 표본에서는 `정방향/무한공매도`가
 비용 OFF에서 **+0.62%**, ON에서 **−0.04%** 로 부호가 뒤집혔다.
 
+## 관측 대상 (entities)
+
+개별 종목뿐 아니라 지수·코인·채권을 같은 테이블에 담는다. `documents.code`가
+그대로 FK이므로 코인은 `code='BTC'`가 된다.
+
+```powershell
+python -m scripts.seed_entities          # docs/entities.csv 적용
+python -m scripts.seed_entities --list   # 등록 상태 조회
+```
+
+| kind | 대상 | calendar |
+|---|---|---|
+| index | KOSPI, KOSDAQ, NASDAQ, SPX | krx / us |
+| crypto | BTC, ETH, ALTCOIN | **crypto (24x7, 휴장일 없음)** |
+| bond | KTB, UST | krx / us |
+| commodity | GOLD | us |
+| equity | 000660, 035720, 005930 | krx |
+
+`calendar`가 단순 라벨이 아니다 — 코인은 휴장일이 없어 주말 감성을 다음 거래일로
+넘기는 롤포워드 규칙이 주식과 다르게 적용돼야 한다.
+
+**별칭은 각각 독립 질의다.** 시장은 표기가 여럿이고(`코스피`/`KOSPI`/`코스피지수`)
+각각 다른 기사 집합을 반환하므로, 하나만 쓰면 절반을 놓친다. 중복은 URL UNIQUE로
+걸러지므로 겹쳐 돌려도 안전하다. 한국어 질의는 한국 로케일, 영어는 미국 로케일로
+자동 분기하고 엇갈린 조합은 요청하지 않는다.
+
 ## 수집기 실행 (분석/서빙과 분리된 독립 프로세스)
 
 ```powershell
@@ -186,8 +213,14 @@ python -m scripts.collect master                        # KOSPI 종목마스터
 python -m scripts.collect prices 000660 --years 3
 python -m scripts.collect news   000660 --days 30           # 네이버 금융 종목뉴스
 python -m scripts.collect board  000660 --days 30           # 종목토론방
-python -m scripts.collect gnews  000660 --start 2026-01-01 --end 2026-07-01 --step 1
+python -m scripts.collect gnews  KOSPI --start 2026-01-01 --end 2026-07-01
+python -m scripts.collect biz                               # 4chan /biz/ (crypto 전체)
 ```
+
+⚠️ **`biz`는 매일 실행해야 한다.** 4chan 공식 API는 살아있는 카탈로그만 제공하고
+만료된 스레드는 영구 삭제된다(과거 스레드 번호는 전부 404). **백필 경로가 존재하지
+않으므로 놓친 날은 되돌릴 수 없다.** 다른 소스는 며칠 놓쳐도 소급 수집이 되지만
+이것만은 예외다.
 
 ### 후처리 / 유지보수
 
@@ -238,22 +271,30 @@ python -m scripts.collect status
   `cutoff`/`page_cap`/`board_end`로 구분해 어느 레버가 유효한지 알려준다.
 - **가격은 pykrx**(비공식 KRX 스크래핑). 키움 OpenAPI+는 32비트 파이썬 + 실계좌
   로그인이 매번 필요해 자동화에 부적합.
+- **10년치 백필은 무료 소스로 불가능하다.** Google News RSS 아카이브가 얕다 —
+  하루 창 기준 코스피/bitcoin이 2026년 100/78건, 2024년 6/50건, **2016년 3/3건**.
+  한국어는 1년만 지나면 사실상 비어 있고 영어는 2022년이 실용 한계다. 빅카인즈는
+  유료 전환, GDELT는 레이트리밋으로 검증 실패(`[확인 필요]`).
+  → **백필이 아니라 전진 수집이 답이다.** 확보 가능한 만큼만 채우고 오늘부터 매일
+  쌓는다. 가설 검증에는 10년이 필요 없다 — 코인은 2~3년에 사이클이 다 들어 있다.
 
 ## 로드맵
 
-- [x] 스키마 v0.3 + 레거시 이관
-- [x] 인코딩 버그 수정 + 회귀 방어
-- [x] 수집기 이식 (종토방 `author` 파싱, 검색API 백필 금지 명시)
+- [x] 스키마 v0.3 + 레거시 이관 / 인코딩 버그 수정
 - [x] 신호 귀속일(`signal_date`) 분리 — 개장 전 컷오프
-- [x] 백테스트 엔진 (4모드 × 비용 토글 + `fee_schedule` + Buy&Hold)
+- [x] 백테스트 엔진 (4모드 × 비용 토글 + Buy&Hold)
 - [x] FastAPI 서빙 + 일/주/월 차트 + 3선 분해
 - [x] 매체 등급 매핑 (57% → 12.2%) + URL 기반 매체 복원
-- [x] 채점기 (`irrelevant` 라벨 + 반어법 few-shot + 분할 재시도) — 39,577건 채점
-- [x] Google News RSS 백필 — 종목당 180일
-- [x] 근사중복 판정 + 도배 억제
+- [x] 채점기 (`irrelevant` + 반어법 few-shot + 분할 재시도) — 병렬 24건/초
+- [x] 근사중복 + 도배 억제 + 반응 기반 표본
+- [x] 온도지수에 글 수 반영 (신호 2배) + 적응형 백필 창
+- [x] **엔티티 추상화** — 지수/코인/채권/원자재를 같은 스키마로
+- [x] **다국어 수집** — 한/영 로케일 자동 분기, 별칭별 독립 질의
+- [x] **4chan /biz/ 수집기** — 백필 불가 소스, 매일 실행
+- [ ] 스케줄러 등록 (매일 자동 수집) ← 다음
+- [ ] 시장 간 비교 화면 (여론 vs 가격 시차 상관) ← 최종 산출물
+- [ ] 수집/서빙 분리 — 집계 스냅샷 내보내기
 - [ ] 005930 백필 (현재 레거시 8일치)
-- [ ] 균형 잡힌 커뮤니티 소스 확보 (종토방 대체)
-- [ ] 매체 등급 롱테일 정리 (잔여 12.2%)
 
 ### 코스피200 확장 시점으로 미룬 것
 
