@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app.backtest import series
+from app.backtest import cross_market, series
 from app.backtest.engine import DIRECTIONS, POSITION_LIMITS, run_backtest
 from app.config import DEFAULT_TIER_WEIGHTS
 from app.db.conn import get_conn
@@ -132,6 +132,48 @@ def backtest(code: str,
             "net_pnl": res.net_pnl, "buy_hold": res.buy_hold,
             "summary": res.summary, "weights": weights,
             "point_value_krw": round(last["close"]) if last else None}
+
+
+@app.get("/api/entities")
+def entities():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT e.code, e.name, e.kind, e.calendar, e.priority,"
+            " COUNT(d.doc_id) docs, SUM(d.label IS NOT NULL) labeled,"
+            " MIN(d.published_kst_date) mn, MAX(d.published_kst_date) mx "
+            "FROM entities e LEFT JOIN documents d ON e.code = d.code "
+            "WHERE e.is_active = 1 GROUP BY e.code ORDER BY e.priority, docs DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/cross-market")
+def cross_market_api(codes: str | None = None, max_lag: int = Query(5, ge=1, le=15)):
+    """시장별 시차 상관. lag<0 여론 선행 / lag>0 가격 선행."""
+    with get_conn() as conn:
+        known = _known_codes(conn)
+        wanted = None
+        if codes:
+            wanted = [c.strip() for c in codes.split(",") if c.strip()]
+            bad = [c for c in wanted if c not in known]
+            if bad:
+                raise HTTPException(404, f"등록되지 않은 엔티티: {', '.join(bad)}")
+        return {"markets": cross_market.compare(conn, wanted, max_lag)}
+
+
+@app.get("/api/sentiment-matrix")
+def sentiment_matrix_api(codes: str | None = None,
+                         freq: str = Query("W", pattern="^(W|ME)$")):
+    """시장 간 감성 동조화 행렬. 가격이 없는 엔티티도 포함 가능."""
+    with get_conn() as conn:
+        known = _known_codes(conn)
+        wanted = ([c.strip() for c in codes.split(",") if c.strip()] if codes
+                  else [r["code"] for r in conn.execute(
+                      "SELECT code FROM entities WHERE is_active=1 AND priority=1 ORDER BY code")])
+        bad = [c for c in wanted if c not in known]
+        if bad:
+            raise HTTPException(404, f"등록되지 않은 엔티티: {', '.join(bad)}")
+        return cross_market.sentiment_matrix(conn, wanted, freq)
 
 
 @app.get("/")
