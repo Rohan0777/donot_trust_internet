@@ -165,21 +165,31 @@ footer{color:var(--tx3);font-size:11.5px;padding:18px 4px;line-height:1.7}
 
 <script>
 const $ = s => document.querySelector(s);
-const TIERS = [
-  {k:'major',     n:'주요 언론사',   d:5.0},
-  {k:'daily',     n:'일간지 언론사', d:1.0},
-  {k:'online',    n:'인터넷 언론',   d:0.05},
-  {k:'unknown',   n:'미분류',        d:1.0, alert:true},
-  {k:'blog',      n:'블로그',        d:0.01},
-  {k:'community', n:'커뮤니티',      d:0.0, note:'커버리지 불균형'},
-];
-const TIER_KO = {major:'주요 언론사',daily:'일간지',online:'인터넷 언론',
-                 unknown:'미분류',blog:'블로그',community:'커뮤니티'};
+// 프런트는 라벨과 표시 힌트만 갖는다. 기본 가중치를 여기에 또 적으면 백엔드와
+// 조용히 어긋난다 — 실제로 어긋나 있었다(daily 2.0 대 1.0, online 1.0 대 0.05).
+// 값의 단일 출처는 /api/tiers 이며 app/config.py 의 DEFAULT_TIER_WEIGHTS 다.
+const TIER_META = {
+  major:      {n:'주요 언론사(국내)'},
+  daily:      {n:'일간지(국내)'},
+  online:     {n:'인터넷 언론(국내)'},
+  wire:       {n:'국제 통신사'},
+  global:     {n:'해외 유력지'},
+  crypto:     {n:'크립토 전문'},
+  unknown:    {n:'미분류', alert:true},
+  blog:       {n:'블로그'},
+  aggregator: {n:'집계 매체',      note:'중복 계수'},
+  vendor:     {n:'브로커·거래소',  note:'이해관계자'},
+  algo:       {n:'자동생성 리서치', note:'기계 생성'},
+  pr:         {n:'보도자료',       note:'기업 원문'},
+  community:  {n:'커뮤니티',       note:'커버리지 불균형'},
+};
+let TIERS = [];   // [{key, default, docs}] — loadTiers() 가 채운다
+const TIER_KO = Object.fromEntries(
+  Object.entries(TIER_META).map(([k, v]) => [k, v.n]));
 const PALETTE = ['#38bdf8','#f59e0b','#a78bfa','#10b981','#f43f5e','#e879f9','#22d3ee','#fb923c'];
 
 const S = {code:null, freq:'daily', rng:'data', by:'total', direction:'forward',
            poslimit:'long_only', fees:'on', media:[], w:{}};
-TIERS.forEach(t => S.w[t.k] = t.d);
 
 const krw = v => (v<0?'−':'') + Math.abs(Math.round(v)).toLocaleString('ko-KR') + '원';
 const sign = v => (v>0?'+':v<0?'−':'') + Math.abs(v).toLocaleString('ko-KR');
@@ -219,12 +229,28 @@ function segment(id, key, cb){
   });
 }
 
+async function loadTiers(){
+  TIERS = await (await fetch('/api/tiers')).json();
+  TIERS.forEach(t => S.w[t.key] = t.default);
+  buildWeights();
+}
+
 function buildWeights(){
-  $('#weights').innerHTML = TIERS.map(t => `
-    <div class="wcell ${t.alert?'alert':''}">
-      <span class="wname">${t.n}${t.alert?'<span class="badge" id="unkBadge">–</span>':''}${t.note?`<span class="badge" style="background:#334155;color:#94a3b8">${t.note}</span>`:''}</span>
-      <input type="number" step="0.001" min="0" max="1000" value="${t.d}" data-k="${t.k}">
-    </div>`).join('');
+  $('#weights').innerHTML = TIERS.map(t => {
+    const m = TIER_META[t.key] || {n: t.key};
+    // 보유 문서가 0인 등급은 슬라이더를 움직여도 차트가 안 움직인다. 흐리게 표시해
+    // "고장났나?"라는 오해를 막는다.
+    const empty = !t.docs;
+    const badges =
+      (m.alert ? '<span class="badge" id="unkBadge">–</span>' : '') +
+      (m.note ? `<span class="badge" style="background:#334155;color:#94a3b8">${m.note}</span>` : '') +
+      (empty ? '<span class="badge" style="background:#1e293b;color:#64748b">데이터 없음</span>' : '');
+    return `
+    <div class="wcell ${m.alert?'alert':''}" style="${empty?'opacity:.45':''}" title="보유 문서 ${t.docs.toLocaleString('ko-KR')}건">
+      <span class="wname">${m.n}${badges}</span>
+      <input type="number" step="0.001" min="0" max="1000" value="${t.default}" data-k="${t.key}">
+    </div>`;
+  }).join('');
   $('#weights').addEventListener('input', e => {
     const el = e.target; if(!el.dataset.k) return;
     const v = parseFloat(el.value);
@@ -389,8 +415,7 @@ $('#mediaChips').addEventListener('click', e => {
   loadChart();
 });
 
-buildWeights();
-loadStocks().then(refresh);
+loadTiers().then(loadStocks).then(refresh);
 </script>
 </body>
 </html>

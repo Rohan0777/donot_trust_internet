@@ -62,13 +62,31 @@ def _known_codes(conn) -> set[str]:
 @app.get("/api/stocks")
 def stocks():
     with get_conn() as conn:
+        # documents 가 아니라 sentiment_daily 를 센다. 서빙 스냅샷(serve.db)에는
+        # documents 가 빈 테이블로만 존재해서, documents 를 세면 이 목록이 통째로
+        # 비고 종목 드롭다운이 사라진다. sentiment_daily 는 같은 값을 담고 있고
+        # 스냅샷에도 들어 있으므로 두 DB에서 동일하게 동작한다.
         rows = conn.execute(
-            "SELECT s.code, s.name, COUNT(DISTINCT d.published_kst_date) days, COUNT(d.doc_id) docs,"
-            " MIN(d.published_kst_date) mn, MAX(d.published_kst_date) mx "
-            "FROM entities s LEFT JOIN documents d ON s.code = d.code "
-            "GROUP BY s.code HAVING docs > 0 ORDER BY docs DESC"
+            "SELECT e.code, e.name, COUNT(DISTINCT s.kst_date) days,"
+            " COALESCE(SUM(s.doc_cnt), 0) docs,"
+            " MIN(s.kst_date) mn, MAX(s.kst_date) mx "
+            "FROM entities e LEFT JOIN sentiment_daily s ON e.code = s.code "
+            "GROUP BY e.code HAVING docs > 0 ORDER BY docs DESC"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+@app.get("/api/tiers")
+def tiers():
+    """등급 목록과 기본 가중치. 프런트가 슬라이더를 하드코딩하면 백엔드 기본값과
+    조용히 어긋난다(실측: daily 2.0 대 1.0, online 1.0 대 0.05). 여기가 단일 출처다.
+    docs 는 현재 보유량이라 등급이 실제로 지수를 움직일 수 있는지 판단하는 근거가 된다."""
+    with get_conn() as conn:
+        have = {r["tier"]: r["n"] for r in conn.execute(
+            "SELECT m.tier, COALESCE(SUM(s.doc_cnt), 0) n FROM media m "
+            "JOIN sentiment_daily s ON s.media_id = m.media_id GROUP BY m.tier")}
+    return [{"key": k, "default": v, "docs": have.get(k, 0)}
+            for k, v in DEFAULT_TIER_WEIGHTS.items()]
 
 
 @app.get("/api/mapping-progress")
@@ -76,8 +94,10 @@ def mapping_progress():
     """미분류(unknown) 비중. UI에 경고 배지로 노출해 데이터 부채를 숨기지 않는다."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT COUNT(*) total, SUM(m.tier = 'unknown') unknown FROM documents d "
-            "JOIN media m ON d.media_id = m.media_id WHERE m.channel = 'news'"
+            "SELECT COALESCE(SUM(s.doc_cnt), 0) total,"
+            " COALESCE(SUM(CASE WHEN m.tier = 'unknown' THEN s.doc_cnt END), 0) unknown "
+            "FROM sentiment_daily s JOIN media m ON s.media_id = m.media_id "
+            "WHERE m.channel = 'news'"
         ).fetchone()
         mapped = conn.execute(
             "SELECT SUM(tier != 'unknown') mapped, COUNT(*) total FROM media WHERE channel = 'news'"

@@ -160,3 +160,153 @@ online,위키리크스한국,위키리크스한국
 online,뉴스스페이스,뉴스스페이스
 online,스포츠서울,스포츠서울
 online,2news.co.kr,2news.co.kr
+
+# =====================================================================
+# 다국어 수집(2026-08) 이후 추가. 기존 major/daily/online 은 한국 언론 구조를
+# 전제로 정의돼 있어(major = 전통 3대 종합일간지) 해외 매체를 여기 밀어넣으면
+# 등급이 '신뢰도'인지 '국적'인지 모호해진다. 그래서 국제 매체는 별도 등급을 쓴다.
+#   wire   : 국제 통신사 — 1차 취재 후 전세계 재배포 (Reuters/Bloomberg/AP/AFP)
+#   global : 해외 유력 경제·종합지 (WSJ/CNBC/Forbes/Barron's)
+#   crypto : 크립토 전문 매체 (국내외 공통)
+# 아래 네 채널은 channel 컬럼으로 news 분모 밖에 둔다. 등급만 낮추면 "뉴스 문서 중
+# 미분류 비중" 같은 지표가 계속 거짓이 되기 때문이다. 기본 가중치는 전부 0이며
+# 사용자가 명시적으로 켜야 지수에 들어간다(community 와 같은 원칙).
+#   vendor     : 이해관계자 콘텐츠 — 브로커·거래소·투자앱·유료 자문
+#   algo       : 기계 생성 정량 리서치·스크리너
+#   pr         : 보도자료 배포망 — 기업 원문을 그대로 싣는다
+#   aggregator : 집계 매체 — 남의 기사를 재배포한다. 뉴스로 세면 같은 기사가 두 번 세어진다
+# =====================================================================
+
+# --- wire (국제 통신사) ---
+wire,Reuters,Reuters|reuters.com|로이터
+wire,Bloomberg,Bloomberg|Bloomberg.com|bloomberg.com|블룸버그
+wire,AP,AP|apnews.com|Associated Press
+wire,AFP,AFP|afp.com
+
+# --- global (해외 유력지) ---
+global,WSJ,WSJ|wsj.com|The Wall Street Journal|월스트리트저널
+global,CNBC,CNBC|cnbc.com
+global,Forbes,Forbes|forbes.com|포브스
+global,Fortune,Fortune|fortune.com
+global,Barron's,Barron's|barrons.com
+global,MarketWatch,MarketWatch|marketwatch.com
+global,Business Insider,Business Insider|businessinsider.com
+global,Financial Times,Financial Times|ft.com
+global,The Economist,The Economist|economist.com
+global,The Globe and Mail,The Globe and Mail|theglobeandmail.com
+global,Investor's Business Daily,Investor's Business Daily|investors.com
+global,Investopedia,Investopedia|investopedia.com
+global,Quartz,Quartz|qz.com
+global,TheStreet,TheStreet Pro|TheStreet|thestreet.com
+global,CNN Business,CNN Business|cnn.com
+global,BBC,BBC|bbc.com|bbc.co.uk
+global,The Guardian,The Guardian|theguardian.com
+global,Nikkei,Nikkei|nikkei.com|닛케이
+global,South China Morning Post,South China Morning Post|scmp.com
+global,FXStreet,FXStreet|fxstreet.com
+global,FXEmpire,FXEmpire|fxempire.com
+global,Benzinga,Benzinga|benzinga.com
+
+# --- crypto (크립토 전문 · 해외) ---
+crypto,CoinDesk,CoinDesk|coindesk.com
+crypto,The Block,The Block|theblock.co
+crypto,Decrypt,Decrypt|decrypt.co
+crypto,Cointelegraph,Cointelegraph|cointelegraph.com
+crypto,CryptoSlate,CryptoSlate|cryptoslate.com
+crypto,Bitcoin Magazine,Bitcoin Magazine|bitcoinmagazine.com
+crypto,BeInCrypto,BeInCrypto|beincrypto.com
+crypto,Crypto Briefing,Crypto Briefing|cryptobriefing.com
+crypto,CryptoPotato,CryptoPotato|cryptopotato.com
+crypto,Crypto News,Crypto News|crypto.news
+crypto,Cryptonews,Cryptonews|cryptonews.com|Cryptonews.net|cryptonews.net
+crypto,Coinpedia,Coinpedia|coinpedia.org
+crypto,AMBCrypto,AMBCrypto|ambcrypto.com
+crypto,CoinGape,CoinGape|coingape.com
+crypto,CCN,CCN.com|ccn.com
+crypto,99Bitcoins,99Bitcoins|99bitcoins.com
+crypto,Coinfomania,Coinfomania|coinfomania.com
+crypto,Coin Gabbar,Coin Gabbar|coingabbar.com
+crypto,U.Today,U.Today|u.today
+crypto,NewsBTC,NewsBTC|newsbtc.com
+crypto,Bitcoinist,Bitcoinist|bitcoinist.com
+crypto,Bitcoin Foundation,Bitcoin Foundation|bitcoinfoundation.org
+
+# --- crypto (크립토 전문 · 국내) ---
+crypto,블록미디어,블록미디어|blockmedia.co.kr
+crypto,코인리더스,코인리더스|coinreaders.com
+crypto,블록체인투데이,블록체인투데이|blockchaintoday.co.kr
+crypto,토큰포스트,토큰포스트|tokenpost.kr
+crypto,디지털애셋,디지털애셋|digitalasset.works
+crypto,블루밍비트,bloomingbit|bloomingbit.io|블루밍비트
+crypto,코인니스,CoinNess|coinness.com|코인니스
+
+# --- online (국내 인터넷 매체 · 신규) ---
+online,데이터투자,데이터투자|datatooza.com
+online,프라임경제,프라임경제|newsprime.co.kr
+online,미디어펜,미디어펜|mediapen.com
+online,CBC뉴스,CBC뉴스|cbci.co.kr
+online,초이스경제,초이스경제|choicenews.co.kr
+online,비욘드포스트,비욘드포스트|beyondpost.co.kr
+online,이코노미블록,이코노미블록|economybloc.com
+online,산경투데이,산경투데이|sankyungtoday.com
+online,시사저널e,시사저널e|sisajournal-e.com
+online,뉴스톱,뉴스톱|newstopkorea.com
+online,데일리비즈온,데일리비즈온|dailybizon.com
+online,한양경제,한양경제|hanyangeconomy.com
+online,천지일보,천지일보|newscj.com
+online,포쓰저널,포쓰저널|4th.kr
+online,민심뉴스,민심뉴스|minsimnews.com
+online,한국강사신문,한국강사신문|lecturernews.com
+
+# --- aggregator (집계 매체 — news 분모 밖) ---
+aggregator,Yahoo Finance,Yahoo Finance|Yahoo|yahoo.com|finance.yahoo.com,aggregator
+aggregator,TradingView,TradingView|tradingview.com,aggregator
+aggregator,Investing.com,Investing.com|investing.com,aggregator
+aggregator,Nasdaq.com,Nasdaq|nasdaq.com,aggregator
+aggregator,MarketScreener,marketscreener.com|MarketScreener,aggregator
+aggregator,BigGo,biggo.com|BigGo,aggregator
+aggregator,다음뉴스(집계),다음뉴스(집계)|v.daum.net|daum.net,aggregator
+
+# --- vendor (브로커·거래소·투자앱·유료 자문 — news 분모 밖) ---
+vendor,The Motley Fool,The Motley Fool|fool.com,vendor
+vendor,Seeking Alpha,Seeking Alpha|seekingalpha.com,vendor
+vendor,Moomoo,Moomoo|moomoo.com,vendor
+vendor,Robinhood,Robinhood|robinhood.com,vendor
+vendor,Pluang,Pluang|pluang.com,vendor
+vendor,Bybit,Bybit|bybit.com,vendor
+vendor,Binance,Binance|binance.com,vendor
+vendor,KuCoin,KuCoin|kucoin.com,vendor
+vendor,Bitget,Bitget|bitget.com,vendor
+vendor,XTB,XTB.com|xtb.com|XTB,vendor
+vendor,FOREX.com,FOREX.com|forex.com,vendor
+vendor,Mitrade,Mitrade|mitrade.com,vendor
+vendor,Traders Union,Traders Union|tradersunion.com,vendor
+vendor,CoinMarketCap,CoinMarketCap|coinmarketcap.com,vendor
+vendor,CryptoRank,CryptoRank|cryptorank.io,vendor
+vendor,Bitcoin.com,Bitcoin News|bitcoin.com,vendor
+vendor,Yellow.com,Yellow.com|yellow.com,vendor
+vendor,Morningstar,Morningstar|morningstar.com,vendor
+
+# --- algo (기계 생성 정량 리서치 — news 분모 밖) ---
+algo,Simply Wall St,simplywall.st|Simply Wall St,algo
+algo,Trefis,Trefis|trefis.com,algo
+algo,ChartMill,ChartMill|chartmill.com,algo
+algo,StockStory,StockStory|stockstory.org,algo
+algo,MarketBeat,MarketBeat|marketbeat.com,algo
+algo,Kalkine Media,Kalkine Media|kalkinemedia.com,algo
+algo,ETF Database,ETF Database|etfdb.com,algo
+algo,Quiver Quantitative,Quiver Quantitative|quiverquant.com,algo
+algo,24/7 Wall St.,24/7 Wall St.|247wallst.com,algo
+algo,TechStock²,TechStock²|ts2.tech,algo
+algo,FinanceFeeds,FinanceFeeds|financefeeds.com,algo
+algo,Sahm Capital,Sahm|sahmcapital.com,algo
+
+# --- pr (보도자료 배포망 — news 분모 밖) ---
+pr,GlobeNewswire,GlobeNewswire|globenewswire.com,pr
+pr,Business Wire,Business Wire|businesswire.com,pr
+pr,PR Newswire,PR Newswire|prnewswire.com,pr
+pr,openPR,openPR.com|openpr.com,pr
+pr,Stock Titan,Stock Titan|stocktitan.net,pr
+
+# --- community (SNS — 기존 community 채널로) ---
+community,Stocktwits,Stocktwits|stocktwits.com,community
