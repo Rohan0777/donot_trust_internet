@@ -6,15 +6,33 @@
 import numpy as np
 import pandas as pd
 
+from app.config import SHRINKAGE_K
+
 FREQ_RULE = {"daily": None, "weekly": "W-FRI", "monthly": "ME"}
 
 
-def _polarity(pos: pd.Series, neg: pd.Series) -> pd.Series:
-    """극성지수 = (pos − neg) / (pos + neg). 중립은 분모에서도 빠진다.
+def _polarity(pos: pd.Series, neg: pd.Series, shrink: int = SHRINKAGE_K) -> pd.Series:
+    """온도지수 = (pos − neg)/(pos + neg) × n/(n + k)
+
+    앞의 항은 논조 방향, 뒤의 항은 표본 신뢰도다.
+
+    [축소항이 없으면 글이 적은 날이 지수를 지배한다 — 실측]
+    글 1~5건인 날의 62.8%가 극성 ±1.0(최대치)로 찍힌다. 긍정 1건·부정 0건이면
+    +1.0이 되어, 긍정 300·부정 200인 날(+0.2)보다 5배 낙관적으로 보인다.
+    100건 이상인 날의 극단값 비율은 0%다. 즉 차트에서 가장 크게 튀는 지점이
+    가장 근거가 빈약한 날이었다.
+
+    k는 주가 상관으로 튜닝했다. 상관만 보면 k가 클수록 좋지만(k→∞는 순건수와
+    같아진다) 지수가 0 근처로 눌려 차트로 읽히지 않는다. k=10에서 극단값이
+    사라지면서 지수 범위(최대 0.897)를 유지한다.
+
     긍정·부정이 하나도 없는 날은 0이 아니라 NaN이다 — 0으로 두면 '중립 여론'으로
-    오독되지만 실제로는 '판단 근거 없음'이다."""
-    denom = (pos + neg).astype(float).replace(0.0, np.nan)
-    return (pos.astype(float) - neg.astype(float)) / denom
+    오독되지만 실제로는 '판단 근거 없음'이다.
+    """
+    n = (pos + neg).astype(float)
+    denom = n.replace(0.0, np.nan)
+    raw = (pos.astype(float) - neg.astype(float)) / denom
+    return raw * (n / (n + shrink))
 
 
 RANGE_DAYS = {"3m": 90, "6m": 180, "1y": 365, "all": None, "data": None}
@@ -87,6 +105,10 @@ def sentiment_series(conn, code: str, freq: str = "daily", by: str = "total",
         if rule:
             g = g.resample(rule).sum()
         g["polarity"] = _polarity(g["pos"], g["neg"])
+        # 관여도: 글 수의 log를 z-score화. 방향과 무관한 "관심 온도".
+        lg = np.log1p(g["doc_cnt"].astype(float))
+        sd = lg.std(ddof=0)
+        g["heat"] = (lg - lg.mean()) / sd if sd and sd > 0 else 0.0
         return g
 
     if key is None:
@@ -94,7 +116,8 @@ def sentiment_series(conn, code: str, freq: str = "daily", by: str = "total",
         dates = [d.strftime("%Y-%m-%d") for d in g.index]
         return {"dates": dates,
                 "series": {"종합": [None if pd.isna(v) else round(v, 4) for v in g["polarity"]]},
-                "counts": {"종합": [int(v) for v in g["doc_cnt"]]}}
+                "counts": {"종합": [int(v) for v in g["doc_cnt"]]},
+                "heat": [None if pd.isna(v) else round(v, 3) for v in g["heat"]]}
 
     all_idx = _agg(df).index
     series, counts = {}, {}

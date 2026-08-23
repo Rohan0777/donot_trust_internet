@@ -104,7 +104,8 @@ def cmd_gnews(args, log):
         with RunLogger(conn, "gnews", args.code) as run:
             log(f"=== [gnews] {row['name']}({args.code}) {start} ~ {end} (창 {args.step}일) ===")
             stats = google_news_rss.crawl_range(conn, args.code, row["name"], start, end,
-                                                step_days=args.step, progress=log)
+                                                step_days=args.step, progress=log,
+                                                adaptive=not args.fixed_window)
             run.finish(stats)
         log(f"=== [gnews] 완료: {stats} ===")
         if stats["truncated"]:
@@ -142,7 +143,9 @@ def main():
     p_g.add_argument("--days", type=int, default=90, help="end 기준 소급 일수")
     p_g.add_argument("--start", default=None, help="YYYY-MM-DD")
     p_g.add_argument("--end", default=None, help="YYYY-MM-DD")
-    p_g.add_argument("--step", type=int, default=1, help="창 크기(일). 상한에 걸리면 줄인다")
+    p_g.add_argument("--step", type=int, default=32, help="시작 창 크기(일). 상한에 걸리면 자동 분할")
+    p_g.add_argument("--fixed-window", action="store_true",
+                     help="적응형 분할을 끄고 --step 고정 창으로만 수집")
 
     for name, default_pages in (("news", 5000), ("board", 3000)):
         q = sub.add_parser(name, help=f"{name} 수집")

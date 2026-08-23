@@ -7,8 +7,10 @@
       &hl=ko&gl=KR&ceid=KR:ko
 
 제약 3가지 (측정 결과):
-  - 쿼리당 최대 100건. 100건이 꽉 차면 그 구간은 잘린 것이므로 coverage에
-    'partial'로 남기고 창을 더 좁혀 재수집해야 한다. 이 판정을 자동화했다.
+  - 쿼리당 최대 100건. 넓은 창은 조용히 잘린다 — 32일 창이 창내 99건을 주는데
+    16일씩 쪼개면 186건이 나온다(실측). 그래서 창을 넓게 시작해 응답이 100건이면
+    반으로 쪼개는 적응형 분할을 쓴다. 희소 구간은 32일 1회로 끝나고(코스피 2022:
+    32일 창 51건) 밀집 구간만 1일까지 자동으로 쪼개진다.
   - link가 news.google.com 리다이렉트라 원문 URL을 바로 알 수 없다. 본문은
     수집하지 않고 제목만 쓴다(종목토론방과 같은 취급).
   - <source url="..."> 가 매체명과 도메인을 함께 주므로 매체 귀속은 정확하다.
@@ -91,7 +93,14 @@ def _is_offtopic(title: str, aliases: tuple[str, ...], excludes: list[str]) -> b
 
 
 def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
-                step_days: int = 3, progress=print) -> dict:
+                step_days: int = 1, progress=print, adaptive: bool = True) -> dict:
+    """구간을 훑어 수집한다.
+
+    adaptive=True면 넓은 창으로 시작해서, 100건 상한에 걸린 창만 반으로 쪼개
+    다시 시도한다(채점기의 배치 분할과 같은 패턴). 과거 데이터는 밀도가 낮아
+    — 실측상 2024년 코스피가 하루 6건, 2022년 10건 — 하루 단위로 훑으면
+    빈 창에 요청을 낭비한다. 최근 구간만 자동으로 잘게 쪼개진다.
+    """
     aliases = stock_aliases(conn, code) or (name,)
     excludes = _excluded(conn, code)
     collected = now_utc()
@@ -100,28 +109,21 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
     start = datetime.strptime(start_date, "%Y-%m-%d").date()
     end = datetime.strptime(end_date, "%Y-%m-%d").date()
 
-    stats = {"saved": 0, "windows": 0, "offtopic": 0, "truncated": 0, "dates": 0}
+    stats = {"saved": 0, "windows": 0, "offtopic": 0, "truncated": 0, "dates": 0, "splits": 0}
     touched: set[str] = set()
 
-    cursor = start
-    while cursor <= end:
-        win_end = min(cursor + timedelta(days=step_days), end + timedelta(days=1))
+    def handle(win_start, win_end, depth=0):
+        """한 창을 처리한다. 상한에 걸리면 반으로 쪼개 재귀한다."""
         stats["windows"] += 1
         try:
-            items = _fetch(name, cursor.isoformat(), win_end.isoformat())
+            items = _fetch(name, win_start.isoformat(), win_end.isoformat())
         except Exception as exc:  # noqa: BLE001
-            progress(f"  [경고] {cursor}~{win_end} 실패: {type(exc).__name__}: {exc}")
-            for d in _days(cursor, win_end):
+            progress(f"  [경고] {win_start}~{win_end} 실패: {type(exc).__name__}: {exc}")
+            for d in _days(win_start, win_end):
                 upsert_coverage(conn, code, SOURCE, d, "failed", error=str(exc)[:200])
-            cursor = win_end
-            continue
+            return
 
-        # 절단 판정은 응답 건수가 아니라 "요청한 창 안에 든 건수"로 한다.
-        # 구글은 창 밖 기사도 섞어서 100건을 채워 보내므로, 응답이 100건이라는
-        # 사실만으로 partial을 찍으면 이미 완전히 수집한 날짜까지 미완으로 남는다.
-        window_days = set(_days(cursor, win_end))
-        # per_date는 "이번 응답에서 이 날짜로 확인된 기사 수"다. 신규 저장분만 세면
-        # 이미 수집을 마친 날짜가 'empty'(글 없음)로 뒤집힌다 — 둘은 다른 상태다.
+        window_days = set(_days(win_start, win_end))
         per_date: dict[str, int] = {}
         for it in items:
             if it["published"]:
@@ -129,8 +131,22 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
                 if d in window_days:
                     per_date[d] = per_date.get(d, 0) + 1
         in_window = sum(per_date.values())
-        truncated = in_window >= PAGE_CAP
-        stats["truncated"] += 1 if truncated else 0
+        # [분할 판정은 응답 총건수로 한다 — 창내 건수로 하면 안 된다]
+        # 구글은 날짜 필터를 느슨하게 적용해 창 밖 기사로 100건을 채운다. 그래서
+        # 창내 건수는 상한에 못 미치는데 실제로는 잘린 경우가 생긴다. 실측:
+        # 32일 창이 창내 99건(응답 100)을 주는데, 16일씩 쪼개면 186건이 나온다.
+        # 응답이 100건이면 결과셋이 잘린 것이므로, 창내 건수와 무관하게 분할한다.
+        capped = len(items) >= PAGE_CAP
+        span = (win_end - win_start).days
+
+        if capped and span > 1 and depth < 8:
+            stats["splits"] += 1
+            mid = win_start + timedelta(days=span // 2)
+            progress(f"  [분할] {win_start}~{win_end} ({span}일, 창내 {in_window}건 상한) "
+                     f"-> {span//2}+{span-span//2}일")
+            handle(win_start, mid, depth + 1)
+            handle(mid, win_end, depth + 1)
+            return
 
         batch = []
         for it in items:
@@ -142,7 +158,6 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
             if it["url"] in seen:
                 continue
             seen.add(it["url"])
-
             pub_utc = to_utc_iso(it["published"]) if it["published"] else None
             host = urlparse(it["outlet_url"] or "").netloc
             media_id = resolve_media_id(conn, it["outlet"], "news")
@@ -155,18 +170,30 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
                 "ts_confidence": "exact" if pub_utc else "approx",
             })
 
+        # 여기 도달했다는 것은 (a) 응답이 안 잘렸거나 (b) 1일까지 쪼갰는데도 응답이
+        # 100건인 경우다. (b)는 이 API로 더 좁힐 방법이 없으므로 완전성을 보장할 수
+        # 없다 -> partial. (창내 건수가 100 미만이어도 마찬가지다. 구글이 창 밖
+        # 기사로 응답을 채우기 때문에 창내 건수만으로는 잘렸는지 알 수 없다.)
+        stuck = capped and span <= 1
         stats["saved"] += insert_documents(conn, code, SOURCE, batch, aliases)
-
-        for d in _days(cursor, win_end):
+        if stuck:
+            stats["truncated"] += 1
+        for d in _days(win_start, win_end):
             touched.add(d)
-            # 100건이 꽉 찼으면 그 구간은 잘렸다 -> completed로 단정하지 않는다.
             upsert_coverage(conn, code, SOURCE, d,
-                            "partial" if truncated else ("completed" if per_date.get(d) else "empty"),
+                            "partial" if stuck else ("completed" if per_date.get(d) else "empty"),
                             doc_count=per_date.get(d, 0),
-                            last_cursor=f"{cursor}~{win_end}" if truncated else None)
+                            last_cursor=f"{win_start}~{win_end}" if stuck else None)
         conn.commit()
-        progress(f"  {cursor}~{win_end}  신규 {len(batch):>3} / 창내 {in_window:>3} / 응답 {len(items):>3}"
-                 f"{'  [상한 도달 - 창을 좁혀 재수집 필요]' if truncated else ''}")
+        progress(f"  {win_start}~{win_end}  신규 {len(batch):>3} / 창내 {in_window:>3} / 응답 {len(items):>3}"
+                 f"{'  [1일까지 쪼갰으나 응답 상한 - 완전성 미보장]' if stuck else ''}")
+
+    # adaptive면 넓은 창으로 시작, 아니면 step_days 고정
+    stride = max(step_days, 32) if adaptive else step_days
+    cursor = start
+    while cursor <= end:
+        win_end = min(cursor + timedelta(days=stride), end + timedelta(days=1))
+        handle(cursor, win_end)
         cursor = win_end
 
     stats["dates"] = len(touched)
