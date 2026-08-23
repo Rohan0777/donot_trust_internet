@@ -236,6 +236,29 @@ powershell -ExecutionPolicy Bypass -File scripts\install_schedule.ps1
 **4chan만 예외** — 소급 경로가 없어 놓친 날은 영구 손실이다. 하루 2회 도는 이유가
 이것이다.
 
+### 수집 / 서빙 분리
+
+웹은 수집 DB를 아예 열지 않는다. 화면에 필요한 것은 사전집계와 가격뿐이므로
+그것만 담은 스냅샷을 만들어 배포한다.
+
+```powershell
+python -m scripts.export_snapshot          # data/serve.db 생성
+python -m scripts.export_snapshot --verify # 검증만
+
+$env:TNI_DB = "D:\dev	rust-no-internet\data\serve.db"
+python -m scripts.serve
+```
+
+| | |
+|---|---|
+| 수집 DB | 90.3 MB |
+| **서빙 DB** | **4.3 MB (4.8%)** |
+| 포함 | entities · media · prices · sentiment_daily · fee_schedule |
+| **제외** | **documents · raw_documents · coverage · pipeline_runs** |
+
+원문·URL·작성자가 웹 호스트에 아예 존재하지 않으므로 유출면이 줄고, 수집이 몇
+시간 돌아도 사이트 응답에 영향이 없다. 노트북이 꺼져 있어도 사이트는 산다.
+
 ### 후처리 / 유지보수
 
 ```powershell

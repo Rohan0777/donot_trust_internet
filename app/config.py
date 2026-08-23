@@ -6,7 +6,8 @@ from zoneinfo import ZoneInfo
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 MODEL_DIR = BASE_DIR / "models"
-DB_PATH = DATA_DIR / "tni.db"
+# 수집 DB. 서빙 프로세스는 TNI_DB로 스냅샷(serve.db)을 가리켜 수집과 분리한다.
+DB_PATH = Path(os.environ.get("TNI_DB") or (DATA_DIR / "tni.db"))
 
 DATA_DIR.mkdir(exist_ok=True)
 MODEL_DIR.mkdir(exist_ok=True)

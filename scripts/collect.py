@@ -15,7 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.collectors import fourchan, google_news_rss, naver_board, naver_news, price
+from app.collectors import (fourchan, google_news_rss, market_price,
+                            naver_board, naver_news, price)
 from app.db.conn import get_conn, init_db
 from app.db.dao import RunLogger, refresh_sentiment_daily
 
@@ -142,8 +143,15 @@ def cmd_biz(args, log):
 
 def cmd_prices(args, log):
     with get_conn() as conn:
-        n = price.collect_prices(conn, args.code, years=args.years)
-    log(f"[prices] {args.code}: {n:,}행")
+        if args.code:
+            row = conn.execute("SELECT kind FROM entities WHERE code=?", (args.code,)).fetchone()
+            if row and row["kind"] != "equity":
+                n = market_price.collect(conn, args.code, start=args.start)
+            else:
+                n = price.collect_prices(conn, args.code, years=args.years)
+            log(f"[prices] {args.code}: {n:,}행")
+        else:
+            market_price.collect_all(conn, start=args.start, progress=log)
 
 
 def cmd_master(args, log):
@@ -160,9 +168,10 @@ def main():
     sub.add_parser("status", help="수집 원장/실행 이력 조회")
     sub.add_parser("master", help="KOSPI 종목마스터 동기화")
 
-    p = sub.add_parser("prices", help="가격 수집")
-    p.add_argument("code")
+    p = sub.add_parser("prices", help="가격/금리 수집 (code 생략 시 전체)")
+    p.add_argument("code", nargs="?", default=None)
     p.add_argument("--years", type=int, default=3)
+    p.add_argument("--start", default="2025-01-01", help="시장 엔티티 수집 시작일")
 
     p_b = sub.add_parser("biz", help="4chan /biz/ 수집 (백필 불가 — 매일 실행 필요)")
     p_b.add_argument("code", nargs="?", default=None, help="생략하면 crypto 엔티티 전체")

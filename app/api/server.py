@@ -181,4 +181,9 @@ def index():
     return FileResponse(WEB_DIR / "index.html")
 
 
+@app.get("/markets")
+def markets_page():
+    return FileResponse(WEB_DIR / "markets.html")
+
+
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

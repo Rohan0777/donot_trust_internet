@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시장별 여론 온도 — 인터넷을 믿지 마세요</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0a0e17; --panel:#111827; --panel2:#0f1623; --line:#1f2937;
+  --tx:#e5e7eb; --tx2:#94a3b8; --tx3:#64748b;
+  --lead:#10b981; --lag:#f59e0b; --neg:#f43f5e; --price:#38bdf8; --violet:#a78bfa;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);
+  font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;font-size:14px}
+.wrap{max-width:1440px;margin:0 auto;padding:16px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding:14px 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.5px}
+h1 span{color:#fbbf24}
+.spacer{flex:1}
+a.nav{color:var(--tx2);text-decoration:none;font-size:13px;border:1px solid var(--line);
+  padding:6px 12px;border-radius:8px}
+a.nav:hover{color:#fff;border-color:#334155}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px}
+.zone-title{font-size:12px;font-weight:700;color:var(--tx3);letter-spacing:.8px;
+  text-transform:uppercase;margin:0 0 4px}
+.sub{font-size:12.5px;color:var(--tx3);margin:0 0 14px;line-height:1.6}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--tx3);font-size:11.5px;font-weight:600;padding:8px 10px;
+  border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #161e2e;font-variant-numeric:tabular-nums}
+tr:hover td{background:#0d1420}
+.kind{font-size:10.5px;padding:2px 7px;border-radius:99px;background:#1e293b;color:#94a3b8}
+.pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.p-lead{background:#064e3b;color:#a7f3d0}
+.p-lag{background:#78350f;color:#fed7aa}
+.p-sync{background:#1e293b;color:#94a3b8}
+.p-follow{background:#0c4a6e;color:#bae6fd}
+.p-contra{background:#7f1d1d;color:#fecaca}
+.weak{opacity:.42}
+.chart-box{position:relative;height:330px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--tx3);margin-top:10px}
+.legend b{color:var(--tx2)}
+.note{margin-top:12px;padding:10px 13px;border-radius:8px;font-size:12.5px;line-height:1.65;
+  background:#1c1408;border:1px solid #78350f;color:#fed7aa}
+.matrix{overflow-x:auto}
+.matrix td.v{text-align:center;font-weight:600}
+footer{color:var(--tx3);font-size:11.5px;padding:18px 4px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>시장별 <span>여론 온도</span></h1>
+  <div class="spacer"></div>
+  <a class="nav" href="/">← 종목 백테스트</a>
+</header>
+
+<!-- 시차 상관 -->
+<div class="panel">
+  <p class="zone-title">여론과 가격, 무엇이 먼저인가</p>
+  <p class="sub">
+    감성지수를 −5 ~ +5일 시차로 옮겨가며 수익률과의 상관을 재고, 가장 강한 지점을 표시합니다.
+    <b style="color:var(--lead)">여론 선행</b>은 여론을 보고 매매할 여지가 있다는 뜻이고,
+    <b style="color:var(--lag)">가격 선행</b>은 사람들이 움직임을 보고 뒤늦게 떠든다는 뜻입니다.
+    <b>|z| &lt; 2</b>인 행은 흐리게 표시했습니다 — 표본으로 설명되는 수준이라 읽지 마십시오.
+    <b>차분 후</b>는 추세를 제거하고 다시 잰 값입니다. 원래 값과 크게 다르면 두 계열이
+    같이 흐른 것일 뿐 관계가 아닙니다.
+  </p>
+  <div class="note" style="background:#0f1623;border-color:#1f2937;color:#94a3b8">
+    ⚠ <b>지수의 <span style="color:var(--lag)">가격 선행</span>은 발견이 아닙니다.</b>
+    "코스피" 기사는 대개 그날 지수가 어떻게 됐는지를 서술합니다. 지수가 오른 다음날
+    보도가 긍정인 것은 예측이 아니라 사실 전달입니다. 읽을 가치가 있는 쪽은
+    <b style="color:var(--lead)">여론 선행(lag &lt; 0)</b>입니다.
+  </div>
+  <table>
+    <thead><tr>
+      <th>시장</th><th>종류</th><th style="text-align:right">표본</th>
+      <th style="text-align:right">최강 시차</th><th style="text-align:right">상관 r</th>
+      <th style="text-align:right">차분 후</th><th style="text-align:right">|z|</th>
+      <th>선후</th><th>방향</th>
+    </tr></thead>
+    <tbody id="llBody"><tr><td colspan="8" style="color:#64748b">불러오는 중…</td></tr></tbody>
+  </table>
+  <div class="note" id="llNote" style="display:none"></div>
+</div>
+
+<!-- 시차 곡선 -->
+<div class="panel">
+  <p class="zone-title">시차별 상관 곡선</p>
+  <p class="sub">
+    x축 0의 왼쪽은 여론이 앞선 경우, 오른쪽은 가격이 앞선 경우입니다.
+    곡선이 오른쪽에서 솟으면 그 시장의 여론은 <b>후행지표</b>입니다.
+  </p>
+  <div class="chart-box"><canvas id="cLag"></canvas></div>
+</div>
+
+<!-- 감성 동조화 -->
+<div class="panel">
+  <p class="zone-title">시장 간 여론 동조화 (주간)</p>
+  <p class="sub">
+    가격이 아니라 <b>여론끼리</b> 비교합니다. 값이 높으면 두 시장의 보도·게시글 논조가
+    함께 움직인다는 뜻입니다. 가격 데이터가 없는 지수·채권도 포함됩니다.
+  </p>
+  <div class="matrix"><table id="mx"><tbody></tbody></table></div>
+</div>
+
+<footer>
+  상관은 인과가 아닙니다. 두 계열이 같은 사건에 함께 반응했을 수 있고, 표본이 짧으면
+  우연히 높게 나옵니다. |z|를 함께 보십시오.<br>
+  감성지수 = (긍정−부정)/(긍정+부정) × n/(n+10). 뒤의 항은 글이 적은 날의 극단값을 억제합니다.
+</footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const PALETTE = ['#38bdf8','#f59e0b','#a78bfa','#10b981','#f43f5e','#e879f9','#22d3ee','#fb923c',
+                 '#84cc16','#f472b6','#2dd4bf','#c084fc'];
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.font.family = "'Pretendard','Malgun Gothic',sans-serif";
+Chart.defaults.animation = false;
+
+const KIND_KO = {index:'지수',crypto:'가상화폐',bond:'채권',commodity:'원자재',equity:'개별주'};
+let chart;
+
+function leadPill(lag){
+  if (lag < 0) return '<span class="pill p-lead">여론 선행</span>';
+  if (lag > 0) return '<span class="pill p-lag">가격 선행</span>';
+  return '<span class="pill p-sync">동시</span>';
+}
+function dirPill(r){
+  return r < 0 ? '<span class="pill p-contra">역행</span>'
+               : '<span class="pill p-follow">추종</span>';
+}
+
+async function load(){
+  const d = await (await fetch('/api/cross-market?max_lag=5')).json();
+  const rows = d.markets || [];
+  const usable = rows.filter(m => m.best);
+
+  $('#llBody').innerHTML = rows.map(m => {
+    if (!m.best) return `<tr class="weak"><td>${m.name}</td>
+      <td><span class="kind">${KIND_KO[m.kind]||m.kind}</span></td>
+      <td colspan="7" style="color:#64748b">${m.error || '분석 불가'}</td></tr>`;
+    const b = m.best, weak = b.z < 2 ? ' class="weak"' : '';
+    return `<tr${weak}>
+      <td><b>${m.name}</b> <span style="color:#475569">${m.code}</span></td>
+      <td><span class="kind">${KIND_KO[m.kind]||m.kind}</span></td>
+      <td style="text-align:right">${m.days.toLocaleString()}일</td>
+      <td style="text-align:right">${b.lag > 0 ? '+' : ''}${b.lag}일</td>
+      <td style="text-align:right;color:${b.r<0?'var(--neg)':'var(--price)'}">
+        ${b.r>0?'+':''}${b.r.toFixed(3)}</td>
+      <td style="text-align:right;color:#94a3b8">${m.diff_r==null?'–':(m.diff_r>0?'+':'')+m.diff_r.toFixed(3)}</td>
+      <td style="text-align:right">${b.z.toFixed(2)}</td>
+      <td>${leadPill(b.lag)}</td><td>${dirPill(b.r)}</td></tr>`;
+  }).join('');
+
+  const sig = usable.filter(m => m.best.z >= 2);
+  if (sig.length){
+    const lagging = sig.filter(m => m.best.lag > 0);
+    const leading = sig.filter(m => m.best.lag < 0);
+    $('#llNote').style.display = 'block';
+    $('#llNote').innerHTML =
+      `유의한 시장 <b>${sig.length}</b>곳 중 ` +
+      `<b>${lagging.length}</b>곳은 가격이 여론을 앞서고(여론=후행지표), ` +
+      `<b>${leading.length}</b>곳은 여론이 가격을 앞섭니다.` +
+      (lagging.length > leading.length
+        ? ' 여론을 보고 매매한다는 전제 자체가 흔들리는 결과입니다.' : '');
+  }
+
+  // 시차 곡선
+  const lags = [...new Set(usable.flatMap(m => Object.keys(m.lags).map(Number)))].sort((a,b)=>a-b);
+  chart?.destroy();
+  chart = new Chart($('#cLag'), {
+    type:'line',
+    data:{ labels: lags.map(l => (l>0?'+':'')+l+'일'),
+      datasets: usable.slice(0,12).map((m,i) => ({
+        label: m.name,
+        data: lags.map(l => m.lags[l]?.r ?? null),
+        borderColor: PALETTE[i % PALETTE.length], borderWidth:2, pointRadius:2.5,
+        tension:.25, spanGaps:true
+      }))},
+    options:{ responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      scales:{
+        x:{grid:{color:c=>c.tick.label==='0일'?'#475569':'#1f2937',
+                 lineWidth:c=>c.tick.label==='0일'?1.8:1},
+           title:{display:true,text:'← 여론이 앞섬   |   가격이 앞섬 →'}},
+        y:{grid:{color:c=>c.tick.value===0?'#475569':'#1f2937',
+                 lineWidth:c=>c.tick.value===0?1.8:1},
+           title:{display:true,text:'상관계수'}}
+      },
+      plugins:{legend:{labels:{boxWidth:12,font:{size:11.5}}}}}
+  });
+}
+
+async function loadMatrix(){
+  const d = await (await fetch('/api/sentiment-matrix')).json();
+  const codes = d.codes || [];
+  if (codes.length < 2){
+    $('#mx').innerHTML = '<tbody><tr><td style="color:#64748b">비교 가능한 시장이 2개 미만입니다.</td></tr></tbody>';
+    return;
+  }
+  const cell = v => {
+    if (v === null || v === undefined) return '<td class="v" style="color:#334155">–</td>';
+    const a = Math.min(Math.abs(v), 1);
+    const bg = v >= 0 ? `rgba(56,189,248,${a*.55})` : `rgba(244,63,94,${a*.55})`;
+    return `<td class="v" style="background:${bg}">${v>0?'+':''}${v.toFixed(2)}</td>`;
+  };
+  $('#mx').innerHTML =
+    `<thead><tr><th></th>${codes.map(c=>`<th style="text-align:center">${c}</th>`).join('')}</tr></thead>` +
+    `<tbody>${codes.map(a =>
+      `<tr><th>${a}</th>${codes.map(b => cell(d.matrix[a]?.[b])).join('')}</tr>`).join('')}</tbody>`;
+}
+
+load(); loadMatrix();
+</script>
+</body>
+</html>

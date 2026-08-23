@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.collectors import fourchan, google_news_rss, price
+from app.collectors import fourchan, google_news_rss, market_price, price
 from app.db.conn import get_conn, init_db
 from app.db.dao import RunLogger, refresh_sentiment_daily
 from app.scoring.scorer import score_pending
@@ -92,12 +92,13 @@ def run(args, log):
                 summary["errors"] += 1
                 log(f"  [실패] biz {e['code']}\n{traceback.format_exc(limit=2)}")
 
-        # --- 3. 가격 (가격 소스가 있는 종목만) ---
+        # --- 3. 가격 ---
         for e in ents:
-            if e["kind"] not in ("equity",):
-                continue   # 지수·코인·채권 가격 소스는 미구현 [확인 필요]
             try:
-                summary["prices"] += price.collect_prices(conn, e["code"], years=1)
+                if e["kind"] == "equity":
+                    summary["prices"] += price.collect_prices(conn, e["code"], years=1)
+                else:
+                    summary["prices"] += market_price.collect(conn, e["code"], start="2025-01-01")
             except Exception:
                 summary["errors"] += 1
                 log(f"  [실패] 가격 {e['code']}: {sys.exc_info()[1]}")
