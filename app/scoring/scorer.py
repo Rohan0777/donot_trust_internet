@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 
 from openai import OpenAI
 
-from app.config import OPENAI_API_KEY, OPENAI_MODEL, PROMPT_VERSION
+from app.config import (NON_OPINION_CHANNELS, OPENAI_API_KEY, OPENAI_MODEL,
+                        PROMPT_VERSION)
 from app.db.dao import now_utc
 from app.scoring.prompts import build_system
 
@@ -51,7 +52,7 @@ class ScoreStats:
 
 
 def _pending(conn, code: str, limit: int | None, since_days: int | None, channel: str | None,
-             daily_cap: int | None = None):
+             daily_cap: int | None = None, include_non_opinion: bool = False):
     """미채점 대표글 목록.
 
     daily_cap이 있으면 (종목,날짜)당 그 수만큼만 채점 대상으로 삼는다. 일별 집계가
@@ -81,6 +82,12 @@ def _pending(conn, code: str, limit: int | None, since_days: int | None, channel
     if channel:
         sql += "AND m.channel = ? "
         params.append(channel)
+    elif not include_non_opinion:
+        # 가중치 0으로 고정된 채널은 채점 대상에서 뺀다. --channel 로 명시하면
+        # 그 선택이 이긴다(디버깅·재분류용).
+        marks = ",".join("?" * len(NON_OPINION_CHANNELS))
+        sql += f"AND m.channel NOT IN ({marks}) "
+        params.extend(NON_OPINION_CHANNELS)
     if since_days is not None:
         sql += "AND d.published_utc >= datetime('now', ?) "
         params.append(f"-{int(since_days)} days")
@@ -222,11 +229,13 @@ def inherit_duplicate_labels(conn, code: str) -> int:
 def score_pending(conn, code: str, stock_name: str, *, limit: int | None = None,
                   since_days: int | None = None, channel: str | None = None,
                   purge_body: bool = True, daily_cap: int | None = None,
+                  include_non_opinion: bool = False,
                   progress=print) -> ScoreStats:
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY 미설정 (.env 확인)")
 
-    rows = _pending(conn, code, limit, since_days, channel, daily_cap)
+    rows = _pending(conn, code, limit, since_days, channel, daily_cap,
+                    include_non_opinion=include_non_opinion)
     stats = ScoreStats()
     if not rows:
         progress(f"[score] {code}: 미채점 대표글이 없습니다.")

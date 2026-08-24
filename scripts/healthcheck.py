@@ -11,6 +11,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.conn import get_conn
+from app.config import NON_OPINION_CHANNELS
+from app.db.dao import label_coverage
+from app.backtest.cross_market import MIN_LABELED_RATIO
 
 FAIL, WARN, OK = "FAIL", "WARN", "OK"
 
@@ -80,11 +83,25 @@ def checks(conn):
     out.append(_p(OK if gap <= 2 else WARN, f"최근 수집일 {last} ({gap}일 전)",
                   "" if gap <= 2 else "스케줄러가 멎었는지 확인하라"))
 
-    # 8. 미채점 잔량.
-    row = conn.execute(
-        "SELECT COUNT(*) FROM documents WHERE label IS NULL AND is_canonical=1").fetchone()[0]
-    out.append(_p(OK if row < 5000 else WARN, f"미채점 대표글 {row:,}건",
-                  "" if row < 5000 else "채점이 수집을 못 따라가고 있다"))
+    # 8. 미채점 잔량. 가중치 0 채널은 채점하지 않는 것이 정상이므로 분모에서 뺀다 —
+    #    넣어두면 영원히 0에 닿지 않아 경고가 상시로 켜지고, 아무도 보지 않게 된다.
+    marks = ",".join("?" * len(NON_OPINION_CHANNELS))
+    pending = conn.execute(
+        "SELECT COUNT(*) FROM documents d JOIN media m ON d.media_id = m.media_id "
+        f"WHERE d.label IS NULL AND d.is_canonical=1 AND m.channel NOT IN ({marks})",
+        NON_OPINION_CHANNELS).fetchone()[0]
+    out.append(_p(OK if pending < 5000 else WARN, f"미채점 대표글 {pending:,}건",
+                  "" if pending < 5000 else "채점이 수집을 못 따라가고 있다"))
+
+    # 9. 채점 커버리지. 잔량 총량이 작아도 특정 시장만 비어 있으면 그 시장의
+    #    감성지수는 "시장"이 아니라 "먼저 채점된 일부"를 재는 것이 된다.
+    low = [(c, v) for c, v in label_coverage(conn).items()
+           if v["ratio"] is not None and v["ratio"] < MIN_LABELED_RATIO and v["canonical"] >= 500]
+    detail = ", ".join(f"{c} {v['ratio']*100:.0f}%" for c, v in
+                       sorted(low, key=lambda kv: kv[1]["ratio"]))
+    out.append(_p(OK if not low else WARN,
+                  f"시장별 채점률 (하한 {MIN_LABELED_RATIO*100:.0f}%)",
+                  "" if not low else f"{detail} — 화면에서 '채점 미완'으로 표시됨"))
 
     return out
 

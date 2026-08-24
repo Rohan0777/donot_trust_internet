@@ -13,7 +13,8 @@
   - 웹 호스트에 원문·URL·작성자가 아예 존재하지 않는다 (유출면 축소)
 
 documents는 통째로 제외한다. 매체별 차트는 sentiment_daily가 media_id 단위로
-접혀 있어 그것만으로 그려진다.
+접혀 있어 그것만으로 그려진다. 다만 '이 지수가 몇 %의 문서로 만들어졌는가'는
+documents 없이는 알 수 없으므로, 내보내기 시점에 label_coverage로 접어 넣는다.
 """
 import argparse
 import re
@@ -25,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import DATA_DIR, DB_PATH
 from app.db.conn import get_conn
+from app.db.dao import COVERAGE_TABLE, compute_label_coverage
 
 DEFAULT_OUT = DATA_DIR / "serve.db"
 
@@ -64,6 +66,17 @@ def export(src: Path, out: Path, progress=print) -> dict:
             conn.execute(create)
             conn.execute(f"INSERT INTO snap.{t} SELECT * FROM main.{t}")
             stats[t] = conn.execute(f"SELECT COUNT(*) FROM snap.{t}").fetchone()[0]
+
+        # 채점 커버리지는 documents 를 접어서 만든다. 스냅샷에는 documents 가 없으므로
+        # 여기서 미리 계산해 넣지 않으면 사이트가 "이 지수가 몇 %의 문서로 만들어졌는지"를
+        # 영영 알 수 없다 — 라벨률 2%인 시장과 99%인 시장이 같은 표에 나란히 선다.
+        cov = compute_label_coverage(conn)
+        conn.execute(f"CREATE TABLE snap.{COVERAGE_TABLE} ("
+                     "code TEXT PRIMARY KEY, canonical INTEGER, labeled INTEGER)")
+        conn.executemany(
+            f"INSERT INTO snap.{COVERAGE_TABLE}(code, canonical, labeled) VALUES (?,?,?)",
+            [(r["code"], r["canonical"], r["labeled"]) for r in cov])
+        stats[COVERAGE_TABLE] = len(cov)
 
         # 조회 인덱스와 tier 롤업 뷰는 서빙에 직접 쓰이므로 함께 옮긴다.
         for row in conn.execute(
@@ -111,6 +124,12 @@ def verify(out: Path, progress=print) -> bool:
             ok = False
         else:
             progress("  원문 테이블 미포함 확인 (documents / raw_documents)")
+        if COVERAGE_TABLE in names:
+            n = conn.execute(f"SELECT COUNT(*) FROM {COVERAGE_TABLE}").fetchone()[0]
+            progress(f"  {COVERAGE_TABLE:<18}{n:>9,}행")
+        else:
+            progress(f"  [경고] {COVERAGE_TABLE} 누락 — 화면에 채점률이 표시되지 않는다")
+            ok = False
         try:
             conn.execute("SELECT * FROM sentiment_daily_tier LIMIT 1").fetchall()
             progress("  tier 롤업 뷰 동작 확인")

@@ -6,7 +6,7 @@
 import uuid
 from datetime import datetime
 
-from app.config import KST, UTC, WINDOW_END_HHMM
+from app.config import KST, NON_OPINION_CHANNELS, UTC, WINDOW_END_HHMM
 
 CUTOFF_HH, CUTOFF_MM = WINDOW_END_HHMM
 from app.text.normalize import body_hash, normalize_title, simhash64, title_hash
@@ -223,3 +223,48 @@ class RunLogger:
             )
             self.conn.commit()
         return False
+
+
+# --- 채점 커버리지 -----------------------------------------------------------
+# 감성지수는 "채점된 문서"만으로 만들어지는데, 화면에는 그 사실이 어디에도 없다.
+# BTC 라벨률 6%와 KOSPI 99%를 같은 표에 나란히 놓으면 "시장마다 관계가 다르다"는
+# 결론이 나오지만, 실제로 다른 것은 시장이 아니라 채점 진척도일 수 있다.
+#
+# 분모에서 가중치 0 채널(NON_OPINION_CHANNELS)을 뺀다. 그것들은 채점하지 않는 것이
+# 정상이므로 분모에 남기면 영원히 100%에 닿지 못하고, 커버리지가 낮다는 경고가
+# 상시로 켜져 아무도 보지 않게 된다.
+COVERAGE_TABLE = "label_coverage"
+
+
+def compute_label_coverage(conn) -> list[dict]:
+    """code별 (여론채널 대표글, 라벨 보유) 집계. documents가 있는 수집 DB 전용."""
+    marks = ",".join("?" * len(NON_OPINION_CHANNELS))
+    rows = conn.execute(
+        "SELECT d.code, COUNT(*) canonical, "
+        "       SUM(d.label IS NOT NULL) labeled "
+        "FROM documents d JOIN media m ON d.media_id = m.media_id "
+        f"WHERE d.is_canonical = 1 AND m.channel NOT IN ({marks}) "
+        "GROUP BY d.code", NON_OPINION_CHANNELS).fetchall()
+    return [{"code": r["code"], "canonical": r["canonical"],
+             "labeled": r["labeled"] or 0} for r in rows]
+
+
+def label_coverage(conn) -> dict[str, dict]:
+    """{code: {canonical, labeled, ratio}}.
+
+    서빙 스냅샷에는 documents가 없으므로 내보내기 시점에 미리 접어둔
+    label_coverage 테이블을 읽는다. 수집 DB에서는 그때그때 계산한다.
+    둘 다 없으면 빈 dict — 호출부는 '모른다'와 '0%'를 구분해야 한다.
+    """
+    has_docs = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents'").fetchone()
+    if has_docs and conn.execute("SELECT 1 FROM documents LIMIT 1").fetchone():
+        rows = compute_label_coverage(conn)
+    elif conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                      (COVERAGE_TABLE,)).fetchone():
+        rows = [dict(r) for r in conn.execute(
+            f"SELECT code, canonical, labeled FROM {COVERAGE_TABLE}")]
+    else:
+        return {}
+    return {r["code"]: {**r, "ratio": (r["labeled"] / r["canonical"]) if r["canonical"] else None}
+            for r in rows}

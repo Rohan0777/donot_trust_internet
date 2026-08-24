@@ -24,7 +24,14 @@ lag=+1에서 r=+0.72가 나오는데, 추세 공유가 아님을 차분으로 �
 개별 종목(+0.24)보다 지수에서 훨씬 높게 나오는 이유가 이것이다.
 의미 있는 신호는 lag<0 쪽에 있다.
 
-[주의 3: |z|는 유의성을 과대평가한다]
+[주의 3: 채점률이 낮은 시장의 상관은 시장 특성이 아니다]
+감성지수는 라벨이 붙은 문서만으로 만들어진다. 채점이 수집을 못 따라간 시장은
+"그 시장의 여론"이 아니라 "먼저 채점된 일부 문서"를 재는 것이고, 채점 순서가
+발행일 역순이라 최근 구간에 쏠린다. 실측 2026-08-24 기준 BTC 6% / ETH 2% /
+SPX 2% 대 KOSPI 99% 였다. 같은 표에 나란히 놓고 "시장마다 다르다"고 읽으면 안 되므로
+결과에 labeled_ratio 를 함께 실어 보낸다.
+
+[주의 4: |z|는 유의성을 과대평가한다]
 SE=1/sqrt(n-3)은 관측치가 독립일 때의 값이다. 일별 감성·수익률은 자기상관이
 있어 실효 표본이 더 작다. |z|는 하한이 아니라 낙관적 상한으로 읽어야 한다.
 """
@@ -34,6 +41,7 @@ import statistics as st
 import pandas as pd
 
 from app.config import SHRINKAGE_K
+from app.db.dao import label_coverage
 
 # 거래일 개념이 없는 자산은 달력 자체가 다르다. 코인은 주말에도 가격이 있다.
 CALENDAR_247 = {"crypto"}
@@ -81,6 +89,9 @@ def entity_frame(conn, code: str, shrink: int = SHRINKAGE_K) -> pd.DataFrame:
 # 시차를 적용하면 실효 표본이 max_lag만큼 줄어든다. 30일 미만은 어떤 lag에서도
 # 우연히 큰 상관이 나온다 — 실측 BTC 15일이 lag=+5에서 r=+0.947(실효 10개)을 냈다.
 MIN_DAYS = 30
+# 채점률이 이 아래면 상관을 "그 시장의 성질"로 읽을 수 없다. 결과는 계속 내되
+# 경고를 달아 보낸다 — 숨기면 왜 안 보이는지 알 수 없고, 그냥 두면 오독된다.
+MIN_LABELED_RATIO = 0.60
 
 
 def lead_lag(conn, code: str, max_lag: int = 5, use: str = "net") -> dict:
@@ -138,12 +149,21 @@ def compare(conn, codes: list[str] | None = None, max_lag: int = 5) -> list[dict
     if codes is None:
         codes = [r["code"] for r in conn.execute(
             "SELECT code FROM entities WHERE is_active=1 AND priority=1 ORDER BY code")]
+    cov = label_coverage(conn)
     out = []
     for code in codes:
         row = conn.execute("SELECT name, kind FROM entities WHERE code=?", (code,)).fetchone()
         res = lead_lag(conn, code, max_lag)
         res["name"] = row["name"] if row else code
         res["kind"] = row["kind"] if row else "?"
+
+        # ratio 가 None 인 것과 0.0 인 것은 다르다. 전자는 "커버리지를 모른다"(스냅샷이
+        # 구버전), 후자는 "한 건도 채점 안 됐다"다. UI가 구분할 수 있게 그대로 넘긴다.
+        c = cov.get(code)
+        res["labeled"] = c["labeled"] if c else None
+        res["canonical"] = c["canonical"] if c else None
+        res["labeled_ratio"] = round(c["ratio"], 4) if c and c["ratio"] is not None else None
+        res["low_coverage"] = bool(c and c["ratio"] is not None and c["ratio"] < MIN_LABELED_RATIO)
         out.append(res)
     out.sort(key=lambda x: -(abs(x["best"]["r"]) if x.get("best") else 0))
     return out
