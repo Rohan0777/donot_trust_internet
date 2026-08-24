@@ -16,16 +16,23 @@ def collect_prices(conn, code: str, years: int = 3, adjusted: bool = True) -> in
     df = krx.get_market_ohlcv_by_date(fromdate, todate, code, adjusted=adjusted)
     if df is None or df.empty:
         return 0
+    # 수정주가 여부가 계열의 단위를 바꾼다(분할 미반영이면 -50% 가짜 수익률).
+    # 그래서 source에 그 사실까지 적는다 — 나중에 adjusted를 바꾸면 섞이지 않도록.
+    src = f"pykrx:{'adj' if adjusted else 'raw'}"
     rows = [
         (code, idx.strftime("%Y-%m-%d"), float(r["시가"]), float(r["고가"]),
-         float(r["저가"]), float(r["종가"]), int(r["거래량"]), 1 if adjusted else 0)
+         float(r["저가"]), float(r["종가"]), int(r["거래량"]), 1 if adjusted else 0, src)
         for idx, r in df.iterrows()
     ]
+    # pykrx 계열 안에서 수정주가 여부가 바뀐 행만 지운다. 레거시 이관분('legacy:*')은
+    # 건드리지 않는다 — 출처를 모르는 25행을 조용히 지우는 것도 사고다.
+    conn.execute("DELETE FROM prices WHERE code = ? AND source LIKE 'pykrx:%' AND source <> ?",
+                 (code, src))
     conn.executemany(
-        "INSERT INTO prices(code, kst_date, open, high, low, close, volume, is_adjusted) "
-        "VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(code, kst_date) DO UPDATE SET "
+        "INSERT INTO prices(code, kst_date, open, high, low, close, volume, is_adjusted, source) "
+        "VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(code, kst_date) DO UPDATE SET "
         "open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, "
-        "volume=excluded.volume, is_adjusted=excluded.is_adjusted",
+        "volume=excluded.volume, is_adjusted=excluded.is_adjusted, source=excluded.source",
         rows,
     )
     conn.commit()

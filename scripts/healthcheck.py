@@ -93,7 +93,31 @@ def checks(conn):
     out.append(_p(OK if pending < 5000 else WARN, f"미채점 대표글 {pending:,}건",
                   "" if pending < 5000 else "채점이 수집을 못 따라가고 있다"))
 
-    # 9. 채점 커버리지. 잔량 총량이 작아도 특정 시장만 비어 있으면 그 시장의
+    # 9. 가격 계열의 단위 혼재. source가 여러 개인 것 자체는 문제가 아니다 —
+    #    같은 단위의 소스를 이어붙였을 수 있다(실측 레거시->pykrx 경계 -3.6%/+1.4%로
+    #    정상). 진짜 실패는 경계에서 값이 튀는 것이다. UST가 그랬다: 금리(%, 약 4.7)
+    #    411행 위에 ETF 가격(달러, 약 93)을 얹으면 하루에 +1,900%가 찍히고 그 하루가
+    #    상관계수 전체를 지배한다. 그래서 개수가 아니라 경계 수익률을 잰다.
+    JUMP_FAIL, JUMP_WARN = 0.30, 0.15
+    jumps = []
+    for (code,) in conn.execute(
+            "SELECT code FROM prices GROUP BY code HAVING COUNT(DISTINCT source) > 1"):
+        rows = conn.execute(
+            "SELECT kst_date, close, source FROM prices WHERE code = ? ORDER BY kst_date",
+            (code,)).fetchall()
+        for a, b in zip(rows, rows[1:]):
+            if a["source"] == b["source"] or not a["close"]:
+                continue
+            r = b["close"] / a["close"] - 1
+            if abs(r) >= JUMP_WARN:
+                jumps.append((code, a["source"], b["source"], b["kst_date"], r))
+    worst = max((abs(j[4]) for j in jumps), default=0.0)
+    detail = "; ".join(f"{c} {s1}->{s2} {d} {r*100:+.0f}%" for c, s1, s2, d, r in jumps[:3])
+    out.append(_p(FAIL if worst >= JUMP_FAIL else (WARN if jumps else OK),
+                  "가격 계열 이어붙인 경계 연속성",
+                  detail or ""))
+
+    # 채점 커버리지. 잔량 총량이 작아도 특정 시장만 비어 있으면 그 시장의
     #    감성지수는 "시장"이 아니라 "먼저 채점된 일부"를 재는 것이 된다.
     low = [(c, v) for c, v in label_coverage(conn).items()
            if v["ratio"] is not None and v["ratio"] < MIN_LABELED_RATIO and v["canonical"] >= 500]

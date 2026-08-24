@@ -70,6 +70,10 @@ CREATE TABLE IF NOT EXISTS prices (
     open      REAL, high REAL, low REAL, close REAL,
     volume    INTEGER,
     is_adjusted INTEGER NOT NULL DEFAULT 0,
+    -- 이 계열이 어느 심볼에서 왔는가. 심볼을 바꾸면 단위가 달라지는데(UST: 금리 %
+    -- -> ETF 가격 $), 섞이면 전환일에 말도 안 되는 수익률이 생기고 아무도 눈치채지
+    -- 못한다. 기록해 두면 수집기가 자동으로 감지해 과거 행을 지운다.
+    source    TEXT,
     PRIMARY KEY (code, kst_date)
 );
 

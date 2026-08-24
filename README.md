@@ -237,13 +237,13 @@ python -m scripts.seed_entities          # docs/entities.csv 적용
 python -m scripts.seed_entities --list   # 등록 상태 조회
 ```
 
-| kind | 대상 | calendar |
-|---|---|---|
-| index | KOSPI, KOSDAQ, NASDAQ, SPX | krx / us |
-| crypto | BTC, ETH, ALTCOIN | **crypto (24x7, 휴장일 없음)** |
-| bond | KTB, UST | krx / us |
-| commodity | GOLD | us |
-| equity | 000660, 035720, 005930 | krx |
+| kind | 대상 | calendar | 가격 소스 |
+|---|---|---|---|
+| index | KOSPI, KOSDAQ, NASDAQ, SPX | krx / us | KS11 · KQ11 · IXIC · US500 |
+| crypto | BTC, ETH, ALTCOIN | **crypto (24x7, 휴장일 없음)** | BTC/KRW · ETH/KRW · **합성 지수** |
+| bond | KTB, UST | krx / us | **148070 · IEF (ETF 가격, 금리 아님)** |
+| commodity | GOLD | us | GC=F |
+| equity | 000660, 035720, 005930 | krx | pykrx |
 
 `calendar`가 단순 라벨이 아니다 — 코인은 휴장일이 없어 주말 감성을 다음 거래일로
 넘기는 롤포워드 규칙이 주식과 다르게 적용돼야 한다.
@@ -366,6 +366,18 @@ python -m scripts.collect status
   게시판 페이지네이션이 **1,001페이지에서 소진**된다(실측 SK하이닉스 19,279건
   = 1.5일치). `--max-pages`를 올려도 소용없다 — 크롤러가 `stopped` 사유를
   `cutoff`/`page_cap`/`board_end`로 구분해 어느 레버가 유효한지 알려준다.
+- **국내 국고채 금리는 무료 소스가 없다.** `KR10YT=RR` / `KR3YT=RR` / `KR1YT=RR`
+  모두 404이고 한국은행 ECOS API는 키 발급이 필요하다. 그래서 채권은 금리가 아니라
+  **ETF 가격**으로 담는다(KTB→148070 KOSEF 국고채10년, UST→IEF).
+  UST만 금리로 남기면 두 채권이 다른 단위가 되는데, 시차 상관 표는 모든 엔티티를
+  `close.pct_change()`로 수익률화하므로 금리 계열만 부호가 반대인 채(금리↑ = 채권가격↓)
+  아무 표시 없이 실린다. **ETF는 순수 금리가 아니다** — 듀레이션·보수·추적오차가
+  섞인다. [확인 필요]
+- **알트코인 지수는 직접 만든 합성 계열이다.** 무료 소스가 없어 XRP·SOL·ADA·DOGE
+  4종의 **일간 수익률을 동일가중 평균**해 100에서 체인으로 쌓는다. 가격을 평균하면
+  안 된다 — SOL(13만원)과 DOGE(127원)를 평균하면 사실상 SOL 단독 지수가 된다.
+  고가·저가는 합성 바스켓에 정의되지 않아(코인별 장중 고점 시각이 다르다) 시가·종가
+  범위로만 채운다. **생존편향이 있다** — 오늘 상위인 코인으로 과거를 돌리는 것이다.
 - **가격은 pykrx**(비공식 KRX 스크래핑). 키움 OpenAPI+는 32비트 파이썬 + 실계좌
   로그인이 매번 필요해 자동화에 부적합.
 - **10년치 백필은 무료 소스로 불가능하다.** Google News RSS 아카이브가 얕다 —
@@ -394,7 +406,7 @@ python -m scripts.collect status
 - [x] **해외 매체 등급 분류** — wire/global/crypto 축 신설, 미분류 50.9% -> 17.0%
 - [x] **채점 채널 정리 + 채점률 노출** — 호출 31% 절감, 미완 시장을 화면에서 격리
 - [ ] 005930 백필 (현재 13일치: 2026-07-07 ~ 07-20) ← 다음
-- [ ] KTB · ALTCOIN 가격 소스 확보 (없어서 시차 상관에서 제외됨)
+- [x] **KTB · ALTCOIN 가격 확보** — 채권은 ETF로 단위 통일, 알트코인은 합성 지수
 
 ### 코스피200 확장 시점으로 미룬 것
 
@@ -404,5 +416,7 @@ MinHash/TF-IDF 근사중복, 은어 사전, 로컬 모델 파인튜닝, PostgreS
 ### 확인 필요 항목
 
 - `pykrx` 반환 가격의 수정주가 여부 (액면분할 미반영 시 백테스트 왜곡)
+- 채권 ETF가 "금리 여론"의 대응물로 적절한가 (듀레이션·보수가 섞인다)
+- 알트코인 바스켓 구성 4종이 "알트코인 여론"을 대표하는가 (생존편향 포함)
 - 코스피200 과거 편입 종목 이력 (생존 편향)
 - 실제 거래 수수료율 (현재 `fee_schedule`은 임시 기본값)

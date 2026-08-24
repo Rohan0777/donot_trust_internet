@@ -122,8 +122,11 @@ def migrate(legacy_path: Path, dry_run: bool = False):
             if r["code"] not in ALIASES:
                 continue
             dst.execute(
-                "INSERT OR REPLACE INTO prices(code, kst_date, open, high, low, close, volume, is_adjusted) "
-                "VALUES (?,?,?,?,?,?,?,0)",
+                # 구 DB는 수정주가 여부를 기록하지 않았다. is_adjusted=0 은 "미수정"이
+                # 아니라 "모른다"는 뜻이므로 source에도 그렇게 적는다 — 단정하면
+                # 나중에 경계 점검이 없는 사고를 있다고 보고한다.
+                "INSERT OR REPLACE INTO prices(code, kst_date, open, high, low, close, volume, "
+                "is_adjusted, source) VALUES (?,?,?,?,?,?,?,0,'legacy:unknown')",
                 (r["code"], r["date"], r["open"], r["high"], r["low"], r["close"], r["volume"]),
             )
             stats["prices"] += 1
