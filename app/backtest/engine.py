@@ -8,7 +8,7 @@
   delta    = max(desired, −position)  (보유수량내) | desired  (무한공매도)
   체결가    = open(D)                              # 신호는 D-1 15:30~D 08:50에 확정
   보유비용  = |position|×close×borrow + |cash|×financing   # 연율 bps → 일할(365일)
-             요율이 fee_schedule에 없으면(0) 부과되지 않는다 — [확인 필요]
+             요율은 fee_schedule 참조(2026-08-25 적용: 차입 280 / 금융 938bps)
   순손익    = cash + position × close(D)           # 0원에서 시작, 항상 정의됨
 
 수익률의 분모는 "누적 투입금"이 아니라 **최대 소요자본**이다. 누적 투입금은
