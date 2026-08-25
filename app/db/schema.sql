@@ -68,7 +68,15 @@ CREATE TABLE IF NOT EXISTS fee_schedule (
     buy_bps        REAL NOT NULL,
     sell_bps       REAL NOT NULL,
     tax_bps        REAL NOT NULL,
-    slippage_bps   REAL NOT NULL
+    slippage_bps   REAL NOT NULL,
+    -- 보유기간 비용(carry). 연율 bps, 365일로 일할 부과한다.
+    --   borrow_bps_annual    : 공매도 차입비용 — 익스포저(|position|×종가) 기준
+    --   financing_bps_annual : 현금 금융비용 — 시드머니 0 구조라 매수 즉시 현금이
+    --                          음수가 된다. 즉 정방향 매수도 "돈을 빌려 사는 것"이다.
+    -- [확인 필요] 실제 요율 미확보. 0 = 부과 안 함(기존 결과와 동일).
+    -- 임의의 요율을 지어 넣으면 없는 숫자를 만드는 것이므로 값을 사용자가 채운다.
+    borrow_bps_annual     REAL NOT NULL DEFAULT 0,
+    financing_bps_annual  REAL NOT NULL DEFAULT 0
 );
 
 -- ============================================================

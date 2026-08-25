@@ -7,6 +7,8 @@
   desired  = ±raw                                  # 역배팅이면 부호 반전
   delta    = max(desired, −position)  (보유수량내) | desired  (무한공매도)
   체결가    = open(D)                              # 신호는 D-1 15:30~D 08:50에 확정
+  보유비용  = |position|×close×borrow + |cash|×financing   # 연율 bps → 일할(365일)
+             요율이 fee_schedule에 없으면(0) 부과되지 않는다 — [확인 필요]
   순손익    = cash + position × close(D)           # 0원에서 시작, 항상 정의됨
 
 수익률의 분모는 "누적 투입금"이 아니라 **최대 소요자본**이다. 누적 투입금은
@@ -29,13 +31,17 @@ class Fees:
     sell_bps: float = 1.5
     tax_bps: float = 18.0
     slippage_bps: float = 5.0
+    # --- 보유기간 비용(carry), 연율 bps. 0 = 부과 안 함. 실제 요율은 [확인 필요] ---
+    borrow_bps_annual: float = 0.0     # 공매도 차입 — 익스포저 종가 기준
+    financing_bps_annual: float = 0.0  # 현금 부족 차입 — 시드 0 구조라 매수 즉시 발생
 
     @classmethod
     def load(cls, conn, enabled: bool = True):
         if not enabled:
-            return cls(0.0, 0.0, 0.0, 0.0)
+            return cls(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         row = conn.execute(
-            "SELECT buy_bps, sell_bps, tax_bps, slippage_bps FROM fee_schedule "
+            "SELECT buy_bps, sell_bps, tax_bps, slippage_bps,"
+            " borrow_bps_annual, financing_bps_annual FROM fee_schedule "
             "ORDER BY effective_from DESC LIMIT 1"
         ).fetchone()
         return cls(*row) if row else cls()
@@ -46,6 +52,29 @@ class Fees:
         if delta < 0:
             bps += self.tax_bps
         return notional * bps / 10_000.0
+
+
+DAYS_PER_YEAR = 365.0
+
+
+def carry_charge(fees: Fees, *, position: float, close: float, cash: float) -> float:
+    """하루 보유비용(carry). 거래 수수료와 별개로 포지션이 밤새 유지되는 동안 붙는다.
+
+      공매도(position<0) -> 주식 차입비용 : |position|×종가 × borrow_bps_annual
+      현금 부족(cash<0)  -> 금융비용      : |cash| × financing_bps_annual
+
+    시드머니 0 구조에서 매수 순간 현금은 음수가 되므로 정방향 매수에도 이자가
+    붙는다 — 지금까지 이 비용이 0원으로 쳐져 있었다. 요율은 연율 bps를 365로
+    나눠 일할 부과하며, 그날 거래가 반영된 종가 기준 상태에 대해 매긴다.
+    양의 현금에는 예금 이자를 주지 않는다 — 주는 쪽이 논지에 유리하게 숫자를
+    만지는 꼴이 되므로.
+    """
+    cost = 0.0
+    if position < 0 and fees.borrow_bps_annual:
+        cost += abs(position) * close * fees.borrow_bps_annual / 10_000 / DAYS_PER_YEAR
+    if cash < 0 and fees.financing_bps_annual:
+        cost += (-cash) * fees.financing_bps_annual / 10_000 / DAYS_PER_YEAR
+    return cost
 
 
 @dataclass
@@ -127,6 +156,7 @@ def run_backtest(conn, code: str, weights: dict[str, float], *,
     long_only = position_limit == "long_only"
 
     cash = position = total_cost = 0.0
+    total_carry = 0.0
     trades = 0
     out = BacktestResult()
 
@@ -145,6 +175,13 @@ def run_backtest(conn, code: str, weights: dict[str, float], *,
             trades += 1
 
         equity = position * float(row.close or price_exec)
+        # 보유기간 비용(carry) — 그날 거래가 반영된 종가 기준 상태에 일할 부과.
+        # 요율이 0이면(미설정) carry_charge는 항상 0이라 기존 결과와 동일하다.
+        day_carry = carry_charge(fee, position=position,
+                                 close=float(row.close or price_exec), cash=cash)
+        cash -= day_carry
+        total_carry += day_carry
+
         out.dates.append(row.kst_date.strftime("%Y-%m-%d"))
         out.raw_signal.append(round(float(row.raw), 4))
         out.delta.append(round(delta, 4))
@@ -194,6 +231,9 @@ def run_backtest(conn, code: str, weights: dict[str, float], *,
         "mdd_pct": round(mdd / peak_capital * 100, 2),
         "trades": trades,
         "total_cost": -round(total_cost),
+        # 보유기간 비용 총액. 요율 미설정(0)이면 0 — 그때의 수익률은 이 비용이
+        # 빠진 값임을 화면이 알 수 있게 하기 위해 거래비용과 별도로 노출한다.
+        "carry_total": -round(total_carry),
         "final_position": round(position, 2),
         "buy_hold_pnl": out.buy_hold[-1] if out.buy_hold else 0,
         "days": len(out.dates),

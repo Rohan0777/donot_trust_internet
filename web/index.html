@@ -405,6 +405,7 @@ async function loadBacktest(){
     ['최대 소요자본', s.peak_capital.toLocaleString()+'원',  ''],
     ['최대 낙폭(MDD)', sign(s.mdd_krw)+'원 · '+s.mdd_pct+'%','down'],
     ['총 거래비용',   sign(s.total_cost)+'원',              s.total_cost?'down':''],
+    ...(s.carry_total ? [['보유 비용(carry)', sign(s.carry_total)+'원', 'down']] : []),
     ['거래 횟수',     s.trades.toLocaleString()+'회',        ''],
     ['최종 포지션',   s.final_position.toLocaleString()+'주', s.final_position<0?'down':''],
     ['Buy & Hold',   sign(s.buy_hold_pnl)+'원',             s.buy_hold_pnl>=0?'up':'down'],

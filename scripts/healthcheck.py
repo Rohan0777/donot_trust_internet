@@ -127,23 +127,27 @@ def checks(conn):
                   f"시장별 채점률 (하한 {MIN_LABELED_RATIO*100:.0f}%)",
                   "" if not low else f"{detail} — 화면에서 '채점 미완'으로 표시됨"))
 
-    # 11. 수집 완전성. partial 은 "그 날짜를 끝까지 훑지 못했다"는 뜻이고, 상한에
-    #     걸린 날이 그렇게 남는다. 비중이 높으면 그 종목의 일별 건수는 여론의 크기가
-    #     아니라 상한에 걸린 횟수를 센 것이 된다 — 관여도·확산도가 통째로 거짓이 된다.
-    #     실측 005930: google_rss 366일 중 102일(27.9%)이 partial. 삼성전자는 하루로
-    #     쪼개도 Google News RSS 100건 상한에 걸려 더 좁힐 방법이 없다.
-    PARTIAL_WARN = 0.20
+    # 11. 수집 완전성. 미완결은 partial("끝까지 못 훑음", 대개 응답 상한)과
+    #     failed("아예 못 받아옴") 둘 다다. 한 질의가 남긴 partial 을 같은 실행 안의
+    #     다른 질의 실패로 failed 가 덮는 일이 있으므로(coverage 병합 순위),
+    #     partial 만 세면 그 날짜가 경고에서 통째로 사라진다. 서빙 리본
+    #     (dao.incomplete_dates)은 partial+failed 를 다므로 정의를 여기서 어긋나게
+    #     두면 화면은 물고 있고 원장 점검만 조용히 통과한다. pending 은 분모에서
+    #     제외한다 — 아직 차례가 안 온 날짜까지 세면 초기 백필 중 경고가 항상 켜져
+    #     아무도 보지 않게 된다. 비중이 높으면 그 종목의 일별 건수는 여론의 크기가
+    #     아니라 상한에 걸린 횟수를 센 것이 된다 — 관여도·확산도가 통째로 거짓이다.
+    INCOMPLETE_WARN = 0.20
     rows = conn.execute(
         "SELECT code, source, "
-        " SUM(status = 'partial') p, "
-        " SUM(status IN ('partial','completed','empty')) tot "
+        " SUM(status IN ('partial','failed')) inc, "
+        " SUM(status IN ('partial','failed','completed','empty')) tot "
         "FROM coverage GROUP BY code, source HAVING tot >= 30").fetchall()
-    bad = [(r["code"], r["source"], r["p"] / r["tot"], r["tot"])
-           for r in rows if r["tot"] and r["p"] / r["tot"] >= PARTIAL_WARN]
+    bad = [(r["code"], r["source"], r["inc"] / r["tot"], r["tot"])
+           for r in rows if r["tot"] and r["inc"] / r["tot"] >= INCOMPLETE_WARN]
     detail = ", ".join(f"{c}/{src} {ratio*100:.0f}%({tot}일)"
                        for c, src, ratio, tot in sorted(bad, key=lambda x: -x[2]))
     out.append(_p(OK if not bad else WARN,
-                  f"수집 완전성 (partial 비중 하한 {PARTIAL_WARN*100:.0f}%)",
+                  f"수집 완전성 (미완결 비중 하한 {INCOMPLETE_WARN*100:.0f}%)",
                   detail or ""))
 
     return out

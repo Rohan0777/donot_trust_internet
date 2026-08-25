@@ -26,6 +26,9 @@ def get_conn(db_path=None):
 _ADD_COLUMNS = {
     "prices": {"source": "TEXT"},
     "entities": {"queries_json": "TEXT"},
+    # carry 요율은 뒤늦게 추가된 컬럼 — 기존 DB에는 ALTER로 붙인다(기존 행은 0).
+    "fee_schedule": {"borrow_bps_annual": "REAL NOT NULL DEFAULT 0",
+                     "financing_bps_annual": "REAL NOT NULL DEFAULT 0"},
 }
 
 
