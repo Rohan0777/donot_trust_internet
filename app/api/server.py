@@ -11,7 +11,6 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
 from app.backtest import cross_market, series
 from app.backtest.engine import DIRECTIONS, POSITION_LIMITS, run_backtest
@@ -23,15 +22,6 @@ WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
 TIERS = tuple(DEFAULT_TIER_WEIGHTS.keys())
 
 app = FastAPI(title="인터넷을 믿지 마세요", docs_url="/api/docs")
-
-
-class Weights(BaseModel):
-    major: float = Field(5.0, ge=0, le=1000)
-    daily: float = Field(1.0, ge=0, le=1000)
-    online: float = Field(0.05, ge=0, le=1000)
-    unknown: float = Field(1.0, ge=0, le=1000)
-    blog: float = Field(0.01, ge=0, le=1000)
-    community: float = Field(0.001, ge=0, le=1000)
 
 
 def _parse_weights(raw: str | None) -> dict[str, float]:
@@ -156,19 +146,6 @@ def backtest(code: str,
             "net_pnl": res.net_pnl, "buy_hold": res.buy_hold,
             "summary": res.summary, "weights": weights,
             "point_value_krw": round(last["close"]) if last else None}
-
-
-@app.get("/api/entities")
-def entities():
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT e.code, e.name, e.kind, e.calendar, e.priority,"
-            " COUNT(d.doc_id) docs, SUM(d.label IS NOT NULL) labeled,"
-            " MIN(d.published_kst_date) mn, MAX(d.published_kst_date) mx "
-            "FROM entities e LEFT JOIN documents d ON e.code = d.code "
-            "WHERE e.is_active = 1 GROUP BY e.code ORDER BY e.priority, docs DESC"
-        ).fetchall()
-    return [dict(r) for r in rows]
 
 
 @app.get("/api/cross-market")
