@@ -12,6 +12,7 @@
 """
 import argparse
 import json
+import os
 import sys
 import traceback
 from datetime import date, timedelta
@@ -20,10 +21,34 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.collectors import fourchan, google_news_rss, market_price, price
+from app.config import DATA_DIR
 from app.db.conn import get_conn, init_db
 from app.db.dao import RunLogger, refresh_sentiment_daily
 from app.scoring.scorer import score_pending
 from scripts.collect import Tee
+
+# --- 중복 실행 가드 -----------------------------------------------------------
+# 스케줄러(09:10/21:10)와 수동 실행이 겹치면 두 프로세스가 같은 media 행 INSERT에
+# 경쟁해 UNIQUE 충돌로 수집 라운드 하나가 통째로 죽고(2026-08-25 실측: BTC), 채점도
+# 두 벌 돌아 API 비용이 두 배가 된다. O_EXCL 생성으로 한 명만 진입시킨다.
+LOCK_FILE = DATA_DIR / "daily.lock"
+LOCK_STALE_SEC = 6 * 3600  # 정상 1회 실행은 이보다 짧다. 초과분은 잔존락으로 회수
+
+
+def _acquire_lock() -> bool:
+    for _ in range(2):
+        try:
+            fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return True
+        except FileExistsError:
+            import time
+            if time.time() - LOCK_FILE.stat().st_mtime > LOCK_STALE_SEC:
+                LOCK_FILE.unlink()  # 비정상 종료로 남은 락 — 회수 후 재시도
+                continue
+            return False
+    return False
 
 
 def active_entities(conn, kinds=None, priority=1):
@@ -131,7 +156,14 @@ def main():
     ap.add_argument("--log", type=Path, default=Path("logs/daily.log"))
     args = ap.parse_args()
     log = Tee(args.log)
-    st = run(args, log)
+    if not _acquire_lock():
+        log("이미 daily가 실행 중이다 — 중복 실행을 건너뛴다 "
+            f"(잔존 여부 확인: {LOCK_FILE})")
+        sys.exit(3)
+    try:
+        st = run(args, log)
+    finally:
+        LOCK_FILE.unlink(missing_ok=True)
     sys.exit(1 if st["errors"] else 0)
 
 

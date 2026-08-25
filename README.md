@@ -362,6 +362,10 @@ powershell -ExecutionPolicy Bypass -File scripts\install_schedule.ps1
 **4chan만 예외** — 소급 경로가 없어 놓친 날은 영구 손실이다. 하루 2회 도는 이유가
 이것이다.
 
+`daily`는 자체 잠금(`data/daily.lock`)으로 중복 실행을 막는다 — 스케줄러와 수동
+실행이 겹치면 media INSERT 경쟁으로 라운드가 죽는다(2026-08-25 실측). 이미 돌고
+있으면 즉시 종료(exit 3). 6시간 넘은 락은 비정상 종료 잔존물로 보고 회수한다.
+
 ### 수집 / 서빙 분리
 
 웹은 수집 DB를 아예 열지 않는다. 화면에 필요한 것은 사전집계와 가격뿐이므로
