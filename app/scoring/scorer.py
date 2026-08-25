@@ -208,20 +208,30 @@ def _fetch_batch(client, channel, stock_name, rows, stats, progress, lock):
 
 def inherit_duplicate_labels(conn, code: str) -> int:
     """대표글의 라벨을 같은 중복 그룹의 재배포본에 상속시킨다.
-    재배포본을 따로 채점하는 것은 같은 텍스트에 돈을 두 번 쓰는 것이다."""
+    재배포본을 따로 채점하는 것은 같은 텍스트에 돈을 두 번 쓰는 것이다.
+
+    [prompt_version·confidence도 대표글에서 가져온다]
+    여기에 현재 PROMPT_VERSION을 찍으면 v2 시절 라벨이 v3로 위장한다. 결정 #6이
+    막으려던 "프롬프트 교체 시 인공적 regime shift"가 상속 경로로 다시 생기는
+    셈이고, healthcheck(#3)는 label_model='inherited'를 검사 대상에서 빼므로
+    그 오염은 어떤 점검에도 걸리지 않는다. 이번 실행의 값은 label_model과
+    labeled_at뿐이다."""
+    src = ("(SELECT c.{col} FROM documents c "
+           " WHERE c.dup_group_id = documents.dup_group_id AND c.code = documents.code"
+           "   AND c.published_kst_date = documents.published_kst_date"
+           "   AND c.is_canonical = 1)")
     cur = conn.execute(
-        "UPDATE documents SET label = (SELECT c.label FROM documents c "
-        "  WHERE c.dup_group_id = documents.dup_group_id AND c.code = documents.code"
-        "    AND c.published_kst_date = documents.published_kst_date AND c.is_canonical = 1), "
-        " is_relevant = (SELECT c.is_relevant FROM documents c "
-        "  WHERE c.dup_group_id = documents.dup_group_id AND c.code = documents.code"
-        "    AND c.published_kst_date = documents.published_kst_date AND c.is_canonical = 1), "
-        " label_model = 'inherited', prompt_version = ?, labeled_at = ? "
+        "UPDATE documents SET "
+        f" label = {src.format(col='label')}, "
+        f" is_relevant = {src.format(col='is_relevant')}, "
+        f" confidence = {src.format(col='confidence')}, "
+        f" prompt_version = {src.format(col='prompt_version')}, "
+        " label_model = 'inherited', labeled_at = ? "
         "WHERE code = ? AND is_canonical = 0 AND label IS NULL AND dup_group_id IS NOT NULL "
         "  AND EXISTS (SELECT 1 FROM documents c WHERE c.dup_group_id = documents.dup_group_id "
         "    AND c.code = documents.code AND c.published_kst_date = documents.published_kst_date "
         "    AND c.is_canonical = 1 AND c.label IS NOT NULL)",
-        (PROMPT_VERSION, now_utc(), code),
+        (now_utc(), code),
     )
     return cur.rowcount
 
