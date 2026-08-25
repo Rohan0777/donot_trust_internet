@@ -25,6 +25,7 @@ def get_conn(db_path=None):
 # 못한다. 새 컬럼은 여기에 한 줄씩 추가한다 — 재실행해도 안전해야 한다.
 _ADD_COLUMNS = {
     "prices": {"source": "TEXT"},
+    "entities": {"queries_json": "TEXT"},
 }
 
 

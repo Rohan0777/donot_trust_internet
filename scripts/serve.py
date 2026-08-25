@@ -13,7 +13,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db.conn import init_db
+from app.db.conn import get_conn
+
+
+# 웹은 DB에 쓰지 않는다. 그런데 여기서 init_db()를 부르면 스키마 전체가 생성되어
+# 서빙 스냅샷에 documents / raw_documents / coverage 가 **빈 테이블로 만들어진다.**
+# 이 스냅샷의 존재 이유 중 하나가 "원문이 웹 호스트에 아예 존재하지 않는다"인데
+# 그것이 무효가 되고, export_snapshot --verify 도 배포본에서 실패한다.
+# 게다가 "이 DB에 X 테이블이 있는가"로 분기하는 코드가 전부 오작동한다.
+_REQUIRED = ("entities", "sentiment_daily", "prices")
+
+
+def _require_tables():
+    with get_conn() as conn:
+        have = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+    missing = [t for t in _REQUIRED if t not in have]
+    if missing:
+        raise SystemExit(
+            f"  서빙에 필요한 테이블이 없습니다: {', '.join(missing)}\n"
+            "  스냅샷을 만들거나(python -m scripts.export_snapshot) "
+            "TNI_DB가 올바른 파일을 가리키는지 확인하십시오.")
 
 
 def main():
@@ -23,7 +43,7 @@ def main():
     ap.add_argument("--reload", action="store_true")
     args = ap.parse_args()
 
-    init_db()
+    _require_tables()
     import uvicorn
 
     print(f"  http://{args.host}:{args.port}")

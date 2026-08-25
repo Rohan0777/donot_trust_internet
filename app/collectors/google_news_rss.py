@@ -92,14 +92,23 @@ def entity_locales(conn, code: str) -> list[tuple]:
 
 
 def entity_queries(conn, code: str, fallback: str) -> list[str]:
-    """검색 질의어 목록. aliases의 각 항목이 독립적인 질의가 된다.
-    시장 단위 엔티티는 '코스피|KOSPI|코스피지수'처럼 표기가 여러 개라
-    하나만 쓰면 절반을 놓친다."""
-    row = conn.execute("SELECT aliases_json FROM entities WHERE code = ?", (code,)).fetchone()
-    if row and row["aliases_json"]:
-        qs = json.loads(row["aliases_json"])
-        if qs:
-            return qs
+    """검색 질의어 목록. 각 항목이 독립적인 질의가 된다.
+
+    시장 단위 엔티티는 '코스피|KOSPI|코스피지수'처럼 표기가 여러 개라 하나만 쓰면
+    절반을 놓친다. 대형주는 이유가 하나 더 있다 — Google News RSS 는 질의당 100건이
+    상한이고 그 상한이 **질의마다 따로** 걸리므로, 질의를 늘리는 것이 하루 단위로
+    쪼개도 뚫리지 않는 상한을 우회하는 유일한 수단이다. 중복은 URL UNIQUE 가 막는다.
+
+    queries_json 이 없으면 aliases_json 으로 대체한다. 둘을 구분하는 이유는
+    schema.sql 의 aliases_json 주석 참조 — 별칭을 늘리면 중복 판정이 어긋난다.
+    """
+    row = conn.execute(
+        "SELECT queries_json, aliases_json FROM entities WHERE code = ?", (code,)).fetchone()
+    for col in ("queries_json", "aliases_json"):
+        if row and row[col]:
+            qs = json.loads(row[col])
+            if qs:
+                return qs
     return [fallback]
 
 
@@ -116,7 +125,7 @@ def _is_offtopic(title: str, aliases: tuple[str, ...], excludes: list[str]) -> b
 
 def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
                 step_days: int = 32, progress=print, adaptive: bool = True,
-                locale=None, query=None) -> dict:
+                locale=None, query=None, run_started: str | None = None) -> dict:
     """구간을 훑어 수집한다.
 
     adaptive=True면 넓은 창으로 시작해서, 100건 상한에 걸린 창만 반으로 쪼개
@@ -145,7 +154,8 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
         except Exception as exc:  # noqa: BLE001
             progress(f"  [경고] {win_start}~{win_end} 실패: {type(exc).__name__}: {exc}")
             for d in _days(win_start, win_end):
-                upsert_coverage(conn, code, SOURCE, d, "failed", error=str(exc)[:200])
+                upsert_coverage(conn, code, SOURCE, d, "failed", error=str(exc)[:200],
+                                run_started=run_started)
             return
 
         window_days = set(_days(win_start, win_end))
@@ -208,7 +218,8 @@ def crawl_range(conn, code: str, name: str, start_date: str, end_date: str,
             upsert_coverage(conn, code, SOURCE, d,
                             "partial" if stuck else ("completed" if per_date.get(d) else "empty"),
                             doc_count=per_date.get(d, 0),
-                            last_cursor=f"{win_start}~{win_end}" if stuck else None)
+                            last_cursor=f"{win_start}~{win_end}" if stuck else None,
+                            run_started=run_started)
         conn.commit()
         progress(f"  {win_start}~{win_end}  신규 {len(batch):>3} / 창내 {in_window:>3} / 응답 {len(items):>3}"
                  f"{'  [1일까지 쪼갰으나 응답 상한 - 완전성 미보장]' if stuck else ''}")
@@ -243,6 +254,9 @@ def crawl_entity(conn, code: str, name: str, start_date: str, end_date: str,
     기사 집합을 반환한다. 하나만 쓰면 절반을 놓친다. 중복은 URL UNIQUE로 걸러지므로
     질의를 겹쳐 돌려도 안전하다.
     """
+    # 이 실행을 식별하는 시각. 같은 실행 안에서만 coverage 상태를 병합한다
+    # (질의 5개가 같은 날짜를 훑는데 마지막 질의가 앞선 질의의 partial 을 덮으면 안 된다).
+    run_started = now_utc()
     locales = entity_locales(conn, code)
     queries = entity_queries(conn, code, name)
     total = {"saved": 0, "windows": 0, "offtopic": 0, "truncated": 0,
@@ -259,7 +273,8 @@ def crawl_entity(conn, code: str, name: str, start_date: str, end_date: str,
             progress(f"--- [{code}] {q!r} @ {loc[0]}")
             st = crawl_range(conn, code, name, start_date, end_date,
                              step_days=step_days, progress=progress,
-                             adaptive=adaptive, locale=loc, query=q)
+                             adaptive=adaptive, locale=loc, query=q,
+                             run_started=run_started)
             for k in ("saved", "windows", "offtopic", "truncated", "splits"):
                 total[k] += st.get(k, 0)
             dates |= {d for d in _days(

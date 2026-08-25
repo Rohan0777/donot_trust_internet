@@ -30,8 +30,18 @@ CREATE TABLE IF NOT EXISTS entities (
     -- 수집 로케일. JSON 배열. 예: [["ko","KR","KR:ko"],["en-US","US","US:en"]]
     locales_json      TEXT,
     -- 검색 별칭 / 오탐 제외어. JSON 배열 문자열.
+    --
+    -- [aliases_json 은 검색어가 아니다]
+    -- 이 값은 normalize_title()에서 제목에서 지워지는 토큰이자 _is_offtopic()의
+    -- 관련성 판정 기준이다. 여기에 항목을 더하면 title_hash·simhash 가 바뀌어
+    -- 이미 쌓인 문서와 중복 판정이 어긋난다. 검색어를 늘리고 싶으면 queries_json 을
+    -- 쓴다 — 두 역할을 한 컬럼에 겹쳐 두면 검색 범위를 넓힐 때마다 과거 중복
+    -- 그룹이 깨진다.
     aliases_json      TEXT,
     exclude_json      TEXT,
+    -- 검색 질의어. 각 항목이 독립 질의다(응답 상한 100건이 질의마다 따로 걸린다).
+    -- NULL 이면 aliases_json 으로 대체한다.
+    queries_json      TEXT,
     is_active         INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_entities_active ON entities(is_active, priority, kind);

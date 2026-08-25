@@ -130,10 +130,33 @@ def mark_duplicates(conn, code: str, kst_dates: set[str]) -> tuple[int, int]:
     return groups, demoted
 
 
+# 같은 날짜를 여러 질의로 훑을 때의 상태 병합 순위. 큰 쪽이 이긴다.
+# empty < completed : 한 질의가 0건이어도 다른 질의가 건졌으면 그 날은 수집된 것이다.
+# completed < partial : 한 질의라도 상한에 걸렸으면 그 날의 완전성은 보장할 수 없다.
+# partial < failed : 아예 못 받아온 질의가 있으면 그게 가장 나쁘다.
+_COVERAGE_RANK = {"empty": 0, "pending": 0, "completed": 1, "partial": 2, "failed": 3}
+
+
 def upsert_coverage(conn, code: str, source: str, kst_date: str, status: str,
-                    doc_count: int = 0, last_cursor: str | None = None, error: str | None = None):
+                    doc_count: int = 0, last_cursor: str | None = None, error: str | None = None,
+                    run_started: str | None = None):
     """status 의미는 schema.sql 참조. 부분 수집을 completed로 찍으면 그 날짜가
-    영구히 반쪽으로 고정되므로, 경계(더 오래된 글) 확인 전에는 partial을 유지한다."""
+    영구히 반쪽으로 고정되므로, 경계(더 오래된 글) 확인 전에는 partial을 유지한다.
+
+    [run_started 를 주면 같은 실행 안에서는 나쁜 쪽이 이긴다]
+    한 엔티티를 여러 질의로 돌릴 때(대형주는 질의를 늘리는 것이 응답 상한을 우회하는
+    유일한 수단이다) 마지막 질의가 completed 로 덮어쓰면 앞선 질의가 상한에 걸렸다는
+    사실이 사라진다. doc_count 도 마지막 질의 것만 남아 그 날의 수집량을 과소보고한다.
+    같은 실행에서 이미 쓴 행이면 상태는 _COVERAGE_RANK 로 병합하고 건수는 누적한다.
+    실행이 바뀌면 새로 시작한다 — 그래야 창을 좁혀 재수집했을 때 partial 에서 벗어난다.
+    """
+    prev = conn.execute(
+        "SELECT status, doc_count, updated_utc FROM coverage "
+        "WHERE code = ? AND source = ? AND kst_date = ?", (code, source, kst_date)).fetchone()
+    if run_started and prev and (prev["updated_utc"] or "") >= run_started:
+        doc_count += prev["doc_count"] or 0
+        if _COVERAGE_RANK.get(prev["status"], 0) > _COVERAGE_RANK.get(status, 0):
+            status = prev["status"]
     conn.execute(
         "INSERT INTO coverage(code, source, kst_date, status, doc_count, last_cursor, attempts, error, updated_utc) "
         "VALUES (?,?,?,?,?,?,1,?,?) "
@@ -268,3 +291,55 @@ def label_coverage(conn) -> dict[str, dict]:
         return {}
     return {r["code"]: {**r, "ratio": (r["labeled"] / r["canonical"]) if r["canonical"] else None}
             for r in rows}
+
+
+# --- 수집이 미완결로 남은 날짜 -----------------------------------------------------
+# partial = "그 날짜를 끝까지 훑지 못했다"(대개 응답 상한 100건), failed = 아예 못
+# 받아왔다. 원인은 다르지만 결과는 같다 — 그 날의 건수가 실제보다 적다.
+#
+# [왜 화면까지 올려야 하는가]
+# 지수의 재료는 극성만이 아니다. 백테스트 신호는 순건수 Σ w·(pos−neg)이고 관여도는
+# E = z(log(1+doc_cnt))다. 상한에 걸린 날은 doc_cnt 가 100에서 잘린 **검열된 관측치**라,
+# "여론이 폭발한 날"과 "상한에 걸린 날"이 같은 값으로 찍힌다. 게다가 이 편향은
+# 무작위가 아니라 기사가 가장 많은 날, 즉 신호가 가장 강한 날에 집중된다.
+#
+# 보정하지 않고 표시만 한다. 잘린 건수의 참값을 알 수 없으므로 추정해서 채우면
+# 없는 숫자를 만들어내는 것이 된다.
+INCOMPLETE_TABLE = "date_coverage"
+_INCOMPLETE_STATUS = ("partial", "failed")
+
+
+def compute_incomplete_dates(conn) -> list[tuple[str, str]]:
+    """(code, kst_date) 목록. coverage 가 있는 수집 DB 전용.
+
+    소스 단위로 기록된 것을 날짜 단위로 접는다 — sentiment_daily 는 소스를 구분하지
+    않으므로, 한 소스라도 잘렸으면 그 날의 건수는 검열된 것이다.
+    """
+    marks = ",".join("?" * len(_INCOMPLETE_STATUS))
+    return [(r["code"], r["kst_date"]) for r in conn.execute(
+        f"SELECT DISTINCT code, kst_date FROM coverage WHERE status IN ({marks})",
+        _INCOMPLETE_STATUS)]
+
+
+def incomplete_dates(conn, code: str) -> list[str]:
+    # 테이블 존재가 아니라 **행이 있는지**로 판정한다. 빈 테이블이 있을 수 있고
+    # (배포된 스냅샷에 서빙 프로세스가 스키마를 만들어 둔 경우), 그때 존재만 보고
+    # 분기하면 조용히 빈 결과를 돌려준다.
+    def has_rows(t):
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                            (t,)).fetchone():
+            return False
+        return bool(conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone())
+
+    if has_rows("coverage"):
+        marks = ",".join("?" * len(_INCOMPLETE_STATUS))
+        rows = conn.execute(
+            f"SELECT DISTINCT kst_date FROM coverage WHERE code = ? AND status IN ({marks}) "
+            "ORDER BY kst_date", (code, *_INCOMPLETE_STATUS)).fetchall()
+    elif has_rows(INCOMPLETE_TABLE):
+        rows = conn.execute(
+            f"SELECT kst_date FROM {INCOMPLETE_TABLE} WHERE code = ? ORDER BY kst_date",
+            (code,)).fetchall()
+    else:
+        return []
+    return [r["kst_date"] for r in rows]

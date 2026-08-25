@@ -98,6 +98,15 @@ footer{color:var(--tx3);font-size:11.5px;padding:18px 4px;line-height:1.7}
     </div>
   </div>
   <div class="chart-box"><canvas id="c1"></canvas></div>
+  <p class="sub" id="incompleteNote" style="display:none;margin:8px 0 0;font-size:12px;color:#94a3b8">
+    <span style="display:inline-block;width:22px;height:5px;background:rgba(245,158,11,.55);
+                 vertical-align:middle;margin-right:6px"></span>
+    <b>수집 미완결일</b> — 뉴스 API의 응답 상한(질의당 100건)에 걸렸거나 수집이 실패해
+    <b>그 날의 글 수가 실제보다 적은</b> 날입니다. 감성지수는 극성뿐 아니라 글 수를 재료로 쓰므로
+    (관여도 = z(log(1+글수)), 백테스트 신호 = Σ 가중치 × (긍정−부정)) 이 구간의 지수는
+    아래로 눌려 있습니다. 잘린 참값을 알 수 없어 <b>보정하지 않고 표시만 합니다.</b>
+    <span id="incompletePct"></span>
+  </p>
   <div class="chips" id="mediaChips" style="display:none"></div>
 </div>
 
@@ -212,6 +221,29 @@ const gapPlugin = {
   }
 };
 Chart.register(gapPlugin);
+
+// 수집이 미완결로 남은 날(응답 상한 도달 또는 실패)을 차트 하단 리본으로 표시한다.
+// 전체 높이 음영으로 그리면 안 된다 — 종목에 따라 대상일이 30~70%라 차트를 덮어
+// 가격선을 못 읽는다. 리본은 "이 구간의 건수는 잘린 값"만 말하고 자리를 안 뺏는다.
+const incompletePlugin = {
+  id:'incomplete',
+  afterDatasetsDraw(chart, _a, opts){
+    const set = opts.dates, labels = chart.data.labels;
+    if(!set || !set.size || !labels.length) return;
+    const {ctx, chartArea:ca, scales:{x}} = chart;
+    const h = 5, y = ca.bottom - h;
+    ctx.save(); ctx.fillStyle = 'rgba(245,158,11,.55)';
+    labels.forEach((lb,i) => {
+      if(!set.has(lb)) return;
+      // 주간/월간 집계에서는 라벨이 구간의 시작일이므로 다음 라벨까지 칠한다.
+      const x1 = x.getPixelForValue(i);
+      const x2 = i+1 < labels.length ? x.getPixelForValue(i+1) : x1 + 2;
+      ctx.fillRect(x1, y, Math.max(x2-x1, 2), h);
+    });
+    ctx.restore();
+  }
+};
+Chart.register(incompletePlugin);
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.font.family = "'Pretendard','Malgun Gothic',sans-serif";
 Chart.defaults.animation = false;
@@ -310,6 +342,14 @@ async function loadChart(){
       tension:.2, spanGaps:true, order:1});
   });
 
+  // 수집 미완결일 안내. 대상이 없으면 아예 감춘다 — 항상 떠 있으면 읽지 않게 된다.
+  const incomplete = new Set(d.incomplete_dates || []);
+  const hit = labels.filter(l => incomplete.has(l)).length;
+  $('#incompleteNote').style.display = hit ? 'block' : 'none';
+  $('#incompletePct').textContent = hit
+    ? `이 구간 ${labels.length}개 중 ${hit}개(${(hit/labels.length*100).toFixed(0)}%)가 해당됩니다.`
+    : '';
+
   c1?.destroy();
   c1 = new Chart($('#c1'), {type:'line', data:{labels, datasets:ds}, options:{
     responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
@@ -322,6 +362,7 @@ async function loadChart(){
     },
     plugins:{
       gaps:{gaps:d.coverage_gaps},
+      incomplete:{dates:incomplete},
       legend:{labels:{boxWidth:12,font:{size:11.5}}},
       tooltip:{callbacks:{label:c=>c.dataset.yAxisID==='yP'
         ? ` 주가 ${Math.round(c.parsed.y).toLocaleString()}원`

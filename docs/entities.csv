@@ -1,29 +1,34 @@
-code,kind,name,calendar,priority,locales,aliases,exclude
+code,kind,name,calendar,priority,locales,aliases,exclude,queries
 # 상시 수집 대상. priority=1 이면 매일 수집한다.
 # locales : ko | en | ko+en   (수집 질의를 어느 언어권에서 돌릴지)
-# aliases : 검색 질의어. 파이프(|) 구분. 첫 항목이 대표 질의어다.
+# aliases : 종목 식별 토큰. 파이프(|) 구분. **검색어가 아니다** — 이 값은
+#           normalize_title()에서 제목에서 지워지고 _is_offtopic()의 판정 기준이 된다.
+#           여기에 항목을 더하면 이미 쌓인 문서와 중복 판정이 어긋난다.
 # exclude : 오탐 제외어. 이 단어를 지운 뒤에도 aliases가 남아야 관련 기사로 본다.
+# queries : 검색 질의어. 비우면 aliases를 그대로 쓴다. 각 항목이 독립 질의이고
+#           Google News RSS의 100건 상한이 질의마다 따로 걸리므로, 하루로 쪼개도
+#           안 뚫리는 대형주의 상한을 우회하는 유일한 수단이다.
 #
 # --- 지수 / 주식시장 ---
-KOSPI,index,코스피,krx,1,ko,코스피|KOSPI|코스피지수,
-KOSDAQ,index,코스닥,krx,1,ko,코스닥|KOSDAQ,
-NASDAQ,index,나스닥,us,1,ko+en,나스닥|NASDAQ|나스닥지수,
-SPX,index,S&P500,us,1,ko+en,S&P 500|SP500|에스앤피500,
+KOSPI,index,코스피,krx,1,ko,코스피|KOSPI|코스피지수,,
+KOSDAQ,index,코스닥,krx,1,ko,코스닥|KOSDAQ,,
+NASDAQ,index,나스닥,us,1,ko+en,나스닥|NASDAQ|나스닥지수,,
+SPX,index,S&P500,us,1,ko+en,S&P 500|SP500|에스앤피500,,
 #
 # --- 가상화폐 ---
 # 캘린더가 crypto = 휴장일 없음. 거래일 롤포워드 규칙이 주식과 다르다.
-BTC,crypto,비트코인,crypto,1,ko+en,비트코인|bitcoin|BTC,
-ETH,crypto,이더리움,crypto,1,ko+en,이더리움|ethereum|ETH,
-ALTCOIN,crypto,알트코인,crypto,1,ko+en,알트코인|altcoin|김치프리미엄,
+BTC,crypto,비트코인,crypto,1,ko+en,비트코인|bitcoin|BTC,,
+ETH,crypto,이더리움,crypto,1,ko+en,이더리움|ethereum|ETH,,
+ALTCOIN,crypto,알트코인,crypto,1,ko+en,알트코인|altcoin|김치프리미엄,,
 #
 # --- 채권 / 금리 ---
-KTB,bond,국내채권,krx,1,ko,국고채|기준금리|한국은행 금리,
-UST,bond,미국채,us,1,ko+en,미국 국채|treasury yields|연준 금리|FOMC,
+KTB,bond,국내채권,krx,1,ko,국고채|기준금리|한국은행 금리,,
+UST,bond,미국채,us,1,ko+en,미국 국채|treasury yields|연준 금리|FOMC,,
 #
 # --- 원자재 ---
-GOLD,commodity,금,us,1,ko+en,금값|gold price|금 시세,
+GOLD,commodity,금,us,1,ko+en,금값|gold price|금 시세,,
 #
 # --- 개별 종목 (기존 수집분 유지, 온디맨드) ---
-000660,equity,SK하이닉스,krx,2,ko,SK하이닉스|하이닉스,
-035720,equity,카카오,krx,2,ko,카카오,카카오뱅크|카카오페이|카카오모빌리티|카카오게임즈
-005930,equity,삼성전자,krx,2,ko,삼성전자,
+000660,equity,SK하이닉스,krx,2,ko,SK하이닉스|하이닉스,,
+035720,equity,카카오,krx,2,ko,카카오,카카오뱅크|카카오페이|카카오모빌리티|카카오게임즈,
+005930,equity,삼성전자,krx,2,ko,삼성전자,삼성전자우|삼성전자서비스|삼성전자판매,삼성전자|삼성전자 주가|삼성전자 실적|삼성전자 반도체|삼성전자 HBM

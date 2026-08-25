@@ -17,6 +17,7 @@ from app.backtest import cross_market, series
 from app.backtest.engine import DIRECTIONS, POSITION_LIMITS, run_backtest
 from app.config import DEFAULT_TIER_WEIGHTS
 from app.db.conn import get_conn
+from app.db import dao
 
 WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
 TIERS = tuple(DEFAULT_TIER_WEIGHTS.keys())
@@ -127,6 +128,9 @@ def chart(code: str, freq: str = Query("daily", pattern="^(daily|weekly|monthly)
             },
             "sentiment": sent,
             "coverage_gaps": series.coverage_gaps(conn, code),
+            # 수집이 응답 상한에 걸린 날. 그 날의 건수는 검열된 관측치라 지수의
+            # 관여도·순건수가 아래로 눌려 있다. 보정하지 않고 표시만 한다.
+            "incomplete_dates": dao.incomplete_dates(conn, code),
             "media_catalog": series.media_catalog(conn, code),
         }
 

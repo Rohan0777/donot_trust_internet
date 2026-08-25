@@ -29,15 +29,19 @@ def load(path: Path) -> list[dict]:
         for row in csv.reader(f):
             if not row or row[0].lstrip().startswith("#") or row[0].strip() == "code":
                 continue
-            code, kind, name, calendar, priority, locales, aliases, exclude = (row + [""] * 8)[:8]
+            (code, kind, name, calendar, priority, locales,
+             aliases, exclude, queries) = (row + [""] * 9)[:9]
+            pipe = lambda v: [x.strip() for x in v.split("|") if x.strip()]  # noqa: E731
             out.append({
                 "code": code.strip(), "kind": kind.strip(), "name": name.strip(),
                 "calendar": calendar.strip(), "priority": int(priority or 2),
                 "locales_json": json.dumps(LOCALES.get(locales.strip(), LOCALES["ko"])),
-                "aliases_json": json.dumps([a.strip() for a in aliases.split("|") if a.strip()],
-                                           ensure_ascii=False),
-                "exclude_json": json.dumps([e.strip() for e in exclude.split("|") if e.strip()],
-                                           ensure_ascii=False) if exclude.strip() else None,
+                "aliases_json": json.dumps(pipe(aliases), ensure_ascii=False),
+                "exclude_json": (json.dumps(pipe(exclude), ensure_ascii=False)
+                                 if exclude.strip() else None),
+                # 비우면 aliases 를 그대로 쓴다. 검색 범위를 넓히고 싶을 때만 채운다.
+                "queries_json": (json.dumps(pipe(queries), ensure_ascii=False)
+                                 if queries.strip() else None),
             })
     return out
 
@@ -71,13 +75,14 @@ def main():
         for r in rows:
             conn.execute(
                 "INSERT INTO entities(code, kind, name, calendar, priority, locales_json,"
-                " aliases_json, exclude_json, is_active) VALUES (?,?,?,?,?,?,?,?,1) "
+                " aliases_json, exclude_json, queries_json, is_active) VALUES (?,?,?,?,?,?,?,?,?,1) "
                 "ON CONFLICT(code) DO UPDATE SET kind=excluded.kind, name=excluded.name,"
                 " calendar=excluded.calendar, priority=excluded.priority,"
                 " locales_json=excluded.locales_json, aliases_json=excluded.aliases_json,"
-                " exclude_json=excluded.exclude_json, is_active=1",
+                " exclude_json=excluded.exclude_json, queries_json=excluded.queries_json,"
+                " is_active=1",
                 (r["code"], r["kind"], r["name"], r["calendar"], r["priority"],
-                 r["locales_json"], r["aliases_json"], r["exclude_json"]),
+                 r["locales_json"], r["aliases_json"], r["exclude_json"], r["queries_json"]),
             )
         print(f"{len(rows)}개 등록/갱신 ({args.csv.name})\n")
         show(conn)

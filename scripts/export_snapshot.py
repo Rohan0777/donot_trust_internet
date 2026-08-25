@@ -26,7 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import DATA_DIR, DB_PATH
 from app.db.conn import get_conn
-from app.db.dao import COVERAGE_TABLE, compute_label_coverage
+from app.db.dao import (INCOMPLETE_TABLE, COVERAGE_TABLE, compute_incomplete_dates,
+                        compute_label_coverage)
 
 DEFAULT_OUT = DATA_DIR / "serve.db"
 
@@ -78,6 +79,17 @@ def export(src: Path, out: Path, progress=print) -> dict:
             [(r["code"], r["canonical"], r["labeled"]) for r in cov])
         stats[COVERAGE_TABLE] = len(cov)
 
+        # 수집 상한에 걸린 날짜도 coverage 를 접어서 만든다. 스냅샷에는 coverage 가
+        # 없으므로 여기서 넣지 않으면 사이트가 "이 날의 건수는 잘린 값"이라는 사실을
+        # 영영 표시할 수 없다.
+        incomplete = compute_incomplete_dates(conn)
+        conn.execute(f"CREATE TABLE snap.{INCOMPLETE_TABLE} ("
+                     "code TEXT NOT NULL, kst_date TEXT NOT NULL, "
+                     "PRIMARY KEY (code, kst_date))")
+        conn.executemany(
+            f"INSERT OR IGNORE INTO snap.{INCOMPLETE_TABLE}(code, kst_date) VALUES (?,?)", incomplete)
+        stats[INCOMPLETE_TABLE] = len(incomplete)
+
         # 조회 인덱스와 tier 롤업 뷰는 서빙에 직접 쓰이므로 함께 옮긴다.
         for row in conn.execute(
             "SELECT sql, name, type FROM sqlite_master "
@@ -118,12 +130,25 @@ def verify(out: Path, progress=print) -> bool:
             if t in ("entities", "sentiment_daily", "prices") and not n:
                 ok = False
         # 원문이 새어 나가지 않았는지 확인한다 — 이 스냅샷의 존재 이유 중 하나다.
-        leaked = names & {"documents", "raw_documents"}
-        if leaked:
-            progress(f"  [경고] 원문 테이블이 포함됨: {leaked}")
+        # 배포된 스냅샷에는 빈 documents 테이블이 생겨 있을 수 있다. 유출인지 아닌지는
+        # 존재가 아니라 행 수로 갈린다 — 존재만 보고 실패로 찍으면 정상 배포본이
+        # 매번 실패로 보고되고, 그러면 이 점검을 아무도 믿지 않게 된다.
+        leaked = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                  for t in ("documents", "raw_documents") if t in names}
+        nonempty = {t: n for t, n in leaked.items() if n}
+        if nonempty:
+            progress(f"  [경고] 원문이 포함됨: {nonempty}")
             ok = False
+        elif leaked:
+            progress(f"  원문 없음 확인 (빈 테이블만 존재: {', '.join(leaked)})")
         else:
             progress("  원문 테이블 미포함 확인 (documents / raw_documents)")
+        if INCOMPLETE_TABLE in names:
+            n = conn.execute(f"SELECT COUNT(*) FROM {INCOMPLETE_TABLE}").fetchone()[0]
+            progress(f"  {INCOMPLETE_TABLE:<18}{n:>9,}행")
+        else:
+            progress(f"  [경고] {INCOMPLETE_TABLE} 누락 — 화면에 수집 미완결일이 표시되지 않는다")
+            ok = False
         if COVERAGE_TABLE in names:
             n = conn.execute(f"SELECT COUNT(*) FROM {COVERAGE_TABLE}").fetchone()[0]
             progress(f"  {COVERAGE_TABLE:<18}{n:>9,}행")
