@@ -118,12 +118,14 @@ def run(args, log):
                 log(f"  [실패] biz {e['code']}\n{traceback.format_exc(limit=2)}")
 
         # --- 3. 가격 ---
+        # 감성은 아카이브 고갈로 2016년까지 확보돼 있다(deep_backfill). 가격 축이
+        # 1~2년이면 차트 절반이 잘리므로 동일한 깊이를 유지한다.
         for e in ents:
             try:
                 if e["kind"] == "equity":
-                    summary["prices"] += price.collect_prices(conn, e["code"], years=1)
+                    summary["prices"] += price.collect_prices(conn, e["code"], years=10)
                 else:
-                    summary["prices"] += market_price.collect(conn, e["code"], start="2025-01-01")
+                    summary["prices"] += market_price.collect(conn, e["code"], start="2016-01-01")
             except Exception:
                 summary["errors"] += 1
                 log(f"  [실패] 가격 {e['code']}: {sys.exc_info()[1]}")
