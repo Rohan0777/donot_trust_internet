@@ -12,6 +12,7 @@
 채점 비용이 중복률만큼 줄어든다.
 """
 import json
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,7 +30,11 @@ BATCH_SIZE = 15
 # LLM 호출은 네트워크 대기가 지배적이라 동시성이 거의 선형으로 확장된다
 # (실측 1.6 -> 49.4건/초, 16워커에서 31배). SQLite는 단일 writer이므로
 # 호출만 병렬로 하고 DB 반영은 메인 스레드에서 직렬로 처리한다.
-MAX_WORKERS = 12
+#
+# [워커를 늘려도 처리량이 늘지 않으면] 429(RateLimit) 분할이 폭증하면서 요청이
+# 자증한다 — 이때는 오히려 워커를 줄여야 유효 처리량이 돌아온다(2026-08-25 실측:
+# 12워커가 0.5건/초로 붕괴). TNI_SCORE_WORKERS 로 조절한다.
+MAX_WORKERS = int(os.environ.get("TNI_SCORE_WORKERS", "12"))
 # 커뮤니티 글의 최소 반응(조회수). 이 미만은 아무도 읽지 않은 글이므로 "여론"으로 치지
 # 않는다. 상한에 걸린 날만 반응순으로 자르면 표본 규칙이 날짜마다 달라져 지수에
 # 계단이 생기므로, 모든 날에 같은 하한을 적용한다.
