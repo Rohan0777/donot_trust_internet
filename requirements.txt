@@ -8,7 +8,7 @@ python-dotenv
 joblib
 tqdm
 pykrx
-FinanceDataReader
+finance-datareader
 openai
 rapidfuzz
 fastapi
