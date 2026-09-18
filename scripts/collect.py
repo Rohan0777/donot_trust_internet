@@ -144,8 +144,8 @@ def cmd_biz(args, log):
 def cmd_prices(args, log):
     with get_conn() as conn:
         if args.code:
-            row = conn.execute("SELECT kind FROM entities WHERE code=?", (args.code,)).fetchone()
-            if row and row["kind"] != "equity":
+            row = conn.execute("SELECT kind, calendar FROM entities WHERE code=?", (args.code,)).fetchone()
+            if row and (row["kind"] != "equity" or row["calendar"] == "us"):
                 n = market_price.collect(conn, args.code, start=args.start)
             else:
                 n = price.collect_prices(conn, args.code, years=args.years)
@@ -170,8 +170,8 @@ def main():
 
     p = sub.add_parser("prices", help="가격/금리 수집 (code 생략 시 전체)")
     p.add_argument("code", nargs="?", default=None)
-    p.add_argument("--years", type=int, default=3)
-    p.add_argument("--start", default="2025-01-01", help="시장 엔티티 수집 시작일")
+    p.add_argument("--years", type=int, default=10)
+    p.add_argument("--start", default="2016-01-01", help="시장 엔티티 수집 시작일")
 
     p_b = sub.add_parser("biz", help="4chan /biz/ 수집 (백필 불가 — 매일 실행 필요)")
     p_b.add_argument("code", nargs="?", default=None, help="생략하면 crypto 엔티티 전체")

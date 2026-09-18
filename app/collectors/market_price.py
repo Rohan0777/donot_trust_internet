@@ -42,6 +42,9 @@ SYMBOLS = {
     "SPX":    "US500",
     "BTC":    "BTC/KRW",
     "ETH":    "ETH/KRW",
+    "DOGE":   "DOGE/KRW",
+    "NVDA":   "NVDA",
+    "TSLA":   "TSLA",
     "GOLD":   "GC=F",
     # 채권 ETF (금리 아님 — 위 주석 참조)
     "KTB":    "148070",

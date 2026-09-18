@@ -187,4 +187,14 @@ def markets_page():
     return FileResponse(WEB_DIR / "markets.html")
 
 
+@app.get("/reels")
+def reels_page():
+    return FileResponse(WEB_DIR / "reels.html")
+
+
+@app.get("/reels_btc_data.json")
+def reels_btc_data():
+    return FileResponse(WEB_DIR / "reels_btc_data.json")
+
+
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

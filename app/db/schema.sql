@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE INDEX IF NOT EXISTS idx_doc_code_date  ON documents(code, published_kst_date);
 CREATE INDEX IF NOT EXISTS idx_doc_dedup      ON documents(code, published_kst_date, title_hash);
+CREATE INDEX IF NOT EXISTS idx_doc_dup_group  ON documents(code, published_kst_date, dup_group_id);
 CREATE INDEX IF NOT EXISTS idx_doc_simhash    ON documents(code, published_kst_date, simhash);
 CREATE INDEX IF NOT EXISTS idx_doc_pending    ON documents(code, label) WHERE label IS NULL;
 CREATE INDEX IF NOT EXISTS idx_doc_author     ON documents(code, published_kst_date, author);

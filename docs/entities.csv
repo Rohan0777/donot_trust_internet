@@ -14,12 +14,10 @@ KOSPI,index,코스피,krx,1,ko,코스피|KOSPI|코스피지수,,
 KOSDAQ,index,코스닥,krx,1,ko,코스닥|KOSDAQ,,
 NASDAQ,index,나스닥,us,1,ko+en,나스닥|NASDAQ|나스닥지수,,
 SPX,index,S&P500,us,1,ko+en,S&P 500|SP500|에스앤피500,,
-#
-# --- 가상화폐 ---
-# 캘린더가 crypto = 휴장일 없음. 거래일 롤포워드 규칙이 주식과 다르다.
-BTC,crypto,비트코인,crypto,1,ko+en,비트코인|bitcoin|BTC,,
-ETH,crypto,이더리움,crypto,1,ko+en,이더리움|ethereum|ETH,,
-ALTCOIN,crypto,알트코인,crypto,1,ko+en,알트코인|altcoin|김치프리미엄,,
+# --- 가상화폐 (사용자 요청으로 수집 중단) ---
+# BTC,crypto,비트코인,crypto,9,ko+en,비트코인|bitcoin|BTC,,
+# ETH,crypto,이더리움,crypto,9,ko+en,이더리움|ethereum|ETH,,
+# ALTCOIN,crypto,알트코인,crypto,9,ko+en,알트코인|altcoin|김치프리미엄,,
 #
 # --- 채권 / 금리 ---
 KTB,bond,국내채권,krx,1,ko,국고채|기준금리|한국은행 금리,,
@@ -32,3 +30,17 @@ GOLD,commodity,금,us,1,ko+en,금값|gold price|금 시세,,
 000660,equity,SK하이닉스,krx,2,ko,SK하이닉스|하이닉스,,
 035720,equity,카카오,krx,2,ko,카카오,카카오뱅크|카카오페이|카카오모빌리티|카카오게임즈,
 005930,equity,삼성전자,krx,2,ko,삼성전자,삼성전자우|삼성전자서비스|삼성전자판매,삼성전자|삼성전자 주가|삼성전자 실적|삼성전자 반도체|삼성전자 HBM
+#
+# --- 신규 릴리즈 후보 자산 (3일 주기 영상 제작 대상) ---
+NVDA,equity,엔비디아,us,2,ko+en,엔비디아|NVIDIA|NVDA,,엔비디아|NVIDIA|엔비디아 주가|NVDA
+TSLA,equity,테슬라,us,2,ko+en,테슬라|Tesla|TSLA,,테슬라|Tesla|테슬라 주가|TSLA
+005380,equity,현대차,krx,2,ko,현대차|현대자동차,현대차증권|현대차그룹,현대차|현대자동차|현대차 주가|현대차 실적
+086520,equity,에코프로,krx,2,ko,에코프로,에코프로비엠|에코프로에이치엔|에코프로머티,에코프로|에코프로 주가|에코프로 실적
+035420,equity,NAVER,krx,2,ko,NAVER|네이버,네이버페이|네이버웹툰,네이버|NAVER|네이버 주가|네이버 실적
+#
+# --- 신규 추가 KOSPI 대표 자산 ---
+005490,equity,POSCO홀딩스,krx,2,ko,POSCO홀딩스|포스코홀딩스|포스코,포스코인터내셔널|포스코퓨처엠|포스코DX|포스코스틸리온|포스코엠텍,POSCO홀딩스|포스코홀딩스|포스코 주가|포스코홀딩스 실적
+068270,equity,셀트리온,krx,2,ko,셀트리온,셀트리온제약|셀트리온헬스케어,셀트리온|셀트리온 주가|셀트리온 실적|셀트리온 합병
+000270,equity,기아,krx,2,ko,기아|기아차,기아타이거즈|기아대책|기아자동차서비스,기아 주가|기아차|기아 실적
+105560,equity,KB금융,krx,2,ko,KB금융|KB금융지주,KB증권|KB손해보험|KB국민카드,KB금융|KB금융 주가|KB금융 실적|KB금융 밸류업
+012450,equity,한화에어로스페이스,krx,2,ko,한화에어로스페이스|한화에어로,한화솔루션|한화시스템|한화오션,한화에어로스페이스|한화에어로스페이스 주가|한화에어로 실적

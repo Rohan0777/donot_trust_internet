@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인터넷을 믿지 마세요 - 숏폼 수익률 비교 (비트코인 10년)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Pretendard:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --bg: #07090e;
+  --card-bg: rgba(15, 23, 42, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --tx: #f8fafc;
+  --tx-muted: #94a3b8;
+  --tx-dim: #64748b;
+  
+  --trader-color: #ef4444; /* Red / Orange */
+  --trader-glow: rgba(239, 68, 68, 0.4);
+  
+  --dca-color: #10b981; /* Emerald Green */
+  --dca-glow: rgba(16, 185, 129, 0.4);
+  
+  --bh-color: #38bdf8; /* Cyan Blue */
+  --bh-glow: rgba(56, 189, 248, 0.4);
+  
+  --amber: #f59e0b;
+  --violet: #8b5cf6;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #030712;
+  color: var(--tx);
+  font-family: 'Pretendard', 'Outfit', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-x: hidden;
+}
+
+/* Background Ambient Glow */
+.ambient-bg {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.ambient-blob {
+  position: absolute;
+  filter: blur(140px);
+  border-radius: 50%;
+  opacity: 0.25;
+}
+.blob-1 { width: 500px; height: 500px; background: #8b5cf6; top: -100px; left: -100px; }
+.blob-2 { width: 600px; height: 600px; background: #38bdf8; bottom: -150px; right: -150px; }
+.blob-3 { width: 400px; height: 400px; background: #ef4444; top: 40%; left: 60%; }
+
+/* Control Dashboard Bar (Outside Video Canvas) */
+.controls-header {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 520px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  background: #1e293b;
+  color: #fff;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover { background: #334155; transform: translateY(-1px); }
+.btn-primary { background: linear-gradient(135deg, #3b82f6, #8b5cf6); border: none; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); border: none; }
+.btn-danger.recording { animation: pulse-rec 1.2s infinite alternate; }
+
+@keyframes pulse-rec {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  100% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+}
+
+.speed-select {
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid var(--glass-border);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.slider-container input[type=range] {
+  flex: 1;
+  height: 6px;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+
+/* 9:16 REELS VIDEO CONTAINER */
+.reels-wrapper {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 480px; /* Scaled 9:16 aspect ratio for desktop preview */
+  height: 853px; /* 480 * (16/9) */
+  background: var(--bg);
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Watermark & Top Overlay */
+.reels-header {
+  padding: 24px 20px 10px;
+  background: linear-gradient(180deg, rgba(7,9,14,0.95) 0%, rgba(7,9,14,0) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.badge-tag {
+  align-self: flex-start;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.video-title {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  line-height: 1.25;
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.video-subtitle {
+  font-size: 12.5px;
+  color: var(--tx-muted);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-pill {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: var(--bh-color);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+}
+
+/* ROI COMPARISON CARDS */
+.roi-grid {
+  padding: 6px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roi-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease;
+}
+
+.roi-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+
+.roi-card.trader::before { background: var(--trader-color); box-shadow: 0 0 10px var(--trader-glow); }
+.roi-card.dca::before { background: var(--dca-color); box-shadow: 0 0 10px var(--dca-glow); }
+.roi-card.bh::before { background: var(--bh-color); box-shadow: 0 0 10px var(--bh-glow); }
+
+.roi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roi-name {
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.roi-name .icon { font-size: 14px; }
+.roi-card.trader .roi-name { color: #fca5a5; }
+.roi-card.dca .roi-name { color: #6ee7b7; }
+.roi-card.bh .roi-name { color: #7dd3fc; }
+
+.roi-sub {
+  font-size: 10.5px;
+  color: var(--tx-dim);
+  font-weight: 500;
+}
+
+.roi-stats {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.roi-val {
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.roi-pct {
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+.pct-up { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.pct-down { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+/* CANVAS CHART AREA */
+.chart-area {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  padding: 0 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-box {
+  position: relative;
+  width: 100%;
+  height: 290px;
+}
+
+#mainCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* SENTIMENT & EVENT BOTTOM SECTION */
+.bottom-section {
+  padding: 12px 18px 20px;
+  background: linear-gradient(0deg, rgba(7,9,14,0.98) 0%, rgba(7,9,14,0.7) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sentiment-box {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sentiment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx-muted);
+}
+
+.sentiment-bar-wrap {
+  height: 10px;
+  background: #1e293b;
+  border-radius: 99px;
+  overflow: hidden;
+  display: flex;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.bar-pos { background: linear-gradient(90deg, #10b981, #34d399); height: 100%; transition: width 0.1s ease; }
+.bar-neg { background: linear-gradient(90deg, #f87171, #ef4444); height: 100%; transition: width 0.1s ease; }
+
+.event-ticker {
+  height: 38px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+  border: 1px dashed rgba(245, 158, 11, 0.5);
+  border-radius: 10px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fef08a;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.event-ticker .dot {
+  width: 8px; height: 8px;
+  background: #f59e0b;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #f59e0b;
+  flex-shrink: 0;
+  animation: pulse-dot 1s infinite alternate;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.2); opacity: 1; }
+}
+
+.event-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.footer-watermark {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--tx-dim);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.footer-watermark span { color: var(--amber); }
+
+</style>
+</head>
+<body>
+
+<div class="ambient-bg">
+  <div class="ambient-blob blob-1"></div>
+  <div class="ambient-blob blob-2"></div>
+  <div class="ambient-blob blob-3"></div>
+</div>
+
+<!-- EXTERNAL CONTROLS BOARD -->
+<div class="controls-header">
+  <div class="controls-row">
+    <div class="btn-group">
+      <button id="btnPlay" class="btn btn-primary">▶ 재생</button>
+      <button id="btnReset" class="btn">↺ 처음으로</button>
+    </div>
+    <div class="btn-group">
+      <select id="speedSelect" class="speed-select">
+        <option value="1">1x (정속 60초)</option>
+        <option value="2">2x (30초 완료)</option>
+        <option value="4" selected>4x (15초 초고속)</option>
+      </select>
+      <button id="btnRecord" class="btn btn-danger">📹 60초 영상 녹화 (MP4)</button>
+    </div>
+  </div>
+  <div class="slider-container">
+    <span style="font-size: 11px; color: var(--tx-muted); font-weight: 700;" id="frameLabel">Frame: 0 / 1250</span>
+    <input type="range" id="timeScrubber" min="0" max="1249" value="0">
+  </div>
+</div>
+
+<!-- 9:16 SHORT-FORM VIDEO CONTAINER -->
+<div class="reels-wrapper" id="reelsContainer">
+
+  <!-- HEADER -->
+  <div class="reels-header">
+    <div class="badge-tag">🚨 인터넷 따라하기 백테스트</div>
+    <div class="video-title">비트코인 10년, 소문 따라 사고팔면 어떻게 될까?</div>
+    <div class="video-subtitle">
+      <span>구간: <strong class="date-pill" id="datePill">2016-01-03 ~ 2026-08-26</strong></span>
+    </div>
+  </div>
+
+  <!-- ROI CARDS -->
+  <div class="roi-grid">
+    <!-- TRADER CARD -->
+    <div class="roi-card trader">
+      <div class="roi-info">
+        <div class="roi-name"><span class="icon">🔴</span> 인터넷 따라쟁이 (FOMO)</div>
+        <div class="roi-sub" id="traderSub">거래 수수료/이자로 계좌 녹아내림</div>
+      </div>
+      <div class="roi-stats">
+        <div class="roi-val" id="traderVal" style="color: var(--trader-color);">₩1.69억</div>
+        <div class="roi-pct pct-up" id="traderPct">+0.0%</div>
+      </div>
+    </div>
+
+    <!-- DCA CARD -->
+    <div class="roi-card dca">
+      <div class="roi-info">
+        <div class="roi-name"><span class="icon">🟢</span> 매월 100만 원 적립식 (DCA)</div>
+        <div class="roi-sub">묵묵히 꾸준히 모은 계좌</div>
+      </div>
+      <div class="roi-stats">
+        <div class="roi-val" id="dcaVal" style="color: var(--dca-color);">₩1,000만</div>
+        <div class="roi-pct pct-up" id="dcaPct">+0.0%</div>
+      </div>
+    </div>
+
+    <!-- BUY & HOLD CARD -->
+    <div class="roi-card bh">
+      <div class="roi-info">
+        <div class="roi-name"><span class="icon">🔵</span> 비트코인 단순 보유 (Buy & Hold)</div>
+        <div class="roi-sub">첫 날 사놓고 가만히 있던 사람</div>
+      </div>
+      <div class="roi-stats">
+        <div class="roi-val" id="bhVal" style="color: var(--bh-color);">₩1.69억</div>
+        <div class="roi-pct pct-up" id="bhPct">+0.0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CANVAS CHART -->
+  <div class="chart-area">
+    <div class="canvas-box">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+  </div>
+
+  <!-- BOTTOM SENTIMENT & EVENT SECTION -->
+  <div class="bottom-section">
+    <!-- SENTIMENT BAR -->
+    <div class="sentiment-box">
+      <div class="sentiment-header">
+        <span>뉴스·커뮤니티 감성 지수</span>
+        <span id="sentimentRatioText">긍정 50% vs 부정 50%</span>
+      </div>
+      <div class="sentiment-bar-wrap">
+        <div class="bar-pos" id="barPos" style="width: 50%;"></div>
+        <div class="bar-neg" id="barNeg" style="width: 50%;"></div>
+      </div>
+    </div>
+
+    <!-- EVENT TICKER -->
+    <div class="event-ticker" id="eventTicker">
+      <div class="dot"></div>
+      <div class="event-text" id="eventText">시뮬레이션을 시작합니다. (2016-01-03)</div>
+    </div>
+
+    <!-- WATERMARK -->
+    <div class="footer-watermark">
+      trust-no-internet · <span>인터넷을 믿지 마세요</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let btcData = null;
+let currentFrame = 0;
+let isPlaying = false;
+let animationReq = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+
+// DPR scaling for crisp canvas rendering
+function setupCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+}
+
+// Load BTC dataset
+async function loadData() {
+  try {
+    const resp = await fetch('/reels_btc_data.json');
+    if (!resp.ok) throw new Error('데이터 파일을 불러올 수 없습니다.');
+    btcData = await resp.json();
+    
+    document.getElementById('timeScrubber').max = btcData.frames.length - 1;
+    setupCanvas();
+    renderFrame(0);
+  } catch (err) {
+    console.error(err);
+    alert('데이터 로드 실패: reels_btc_data.json 확인 필요');
+  }
+}
+
+function formatKRW(val) {
+  if (val >= 100_000_000) {
+    return `₩${(val / 100_000_000).toFixed(2)}억`;
+  } else if (val >= 10_000) {
+    return `₩${Math.round(val / 10_000).toLocaleString()}만`;
+  }
+  return `₩${Math.round(val).toLocaleString()}`;
+}
+
+function renderFrame(idx) {
+  if (!btcData || !btcData.frames[idx]) return;
+  
+  currentFrame = idx;
+  const f = btcData.frames[idx];
+  
+  // UI text updates
+  document.getElementById('datePill').textContent = f.date;
+  document.getElementById('frameLabel').textContent = `Frame: ${idx + 1} / ${btcData.frames.length}`;
+  document.getElementById('timeScrubber').value = idx;
+  
+  // ROI Cards updates
+  // 1. Trader
+  document.getElementById('traderVal').textContent = formatKRW(f.trader_val);
+  const tPct = document.getElementById('traderPct');
+  tPct.textContent = `${f.trader_roi >= 0 ? '+' : ''}${f.trader_roi.toFixed(1)}%`;
+  tPct.className = `roi-pct ${f.trader_roi >= 0 ? 'pct-up' : 'pct-down'}`;
+  
+  // 2. DCA
+  document.getElementById('dcaVal').textContent = formatKRW(f.dca_val);
+  const dPct = document.getElementById('dcaPct');
+  dPct.textContent = `${f.dca_roi >= 0 ? '+' : ''}${f.dca_roi.toFixed(1)}%`;
+  dPct.className = `roi-pct ${f.dca_roi >= 0 ? 'pct-up' : 'pct-down'}`;
+
+  // 3. BH
+  document.getElementById('bhVal').textContent = formatKRW(f.bh_val);
+  const bPct = document.getElementById('bhPct');
+  bPct.textContent = `${f.bh_roi >= 0 ? '+' : ''}${f.bh_roi.toFixed(1)}%`;
+  bPct.className = `roi-pct ${f.bh_roi >= 0 ? 'pct-up' : 'pct-down'}`;
+
+  // Sentiment bar
+  const totalSent = (f.pos_cnt + f.neg_cnt) || 1;
+  const posPct = Math.round((f.pos_cnt / totalSent) * 100);
+  const negPct = 100 - posPct;
+  document.getElementById('barPos').style.width = `${posPct}%`;
+  document.getElementById('barNeg').style.width = `${negPct}%`;
+  document.getElementById('sentimentRatioText').textContent = `긍정 ${posPct}% vs 부정 ${negPct}% (건수:${f.doc_cnt})`;
+
+  // Event Ticker
+  if (f.event) {
+    document.getElementById('eventText').textContent = f.event;
+  }
+
+  // Draw Canvas Chart
+  drawChart(idx);
+}
+
+function drawChart(currentIdx) {
+  const rect = canvas.getBoundingClientRect();
+  const width = rect.width;
+  const height = rect.height;
+  
+  ctx.clearRect(0, 0, width, height);
+
+  // Subslice frames up to currentIdx
+  const history = btcData.frames.slice(0, currentIdx + 1);
+  if (history.length < 2) return;
+
+  // Find min/max for scaling
+  let maxVal = 0;
+  let minVal = Infinity;
+
+  // We scale based on entire dataset max to avoid shaky chart
+  for (let i = 0; i <= currentIdx; i++) {
+    const frame = btcData.frames[i];
+    maxVal = Math.max(maxVal, frame.trader_val, frame.dca_val, frame.bh_val);
+    minVal = Math.min(minVal, frame.trader_val, frame.dca_val, frame.bh_val);
+  }
+  minVal = Math.max(0, minVal * 0.9);
+  maxVal = maxVal * 1.05;
+
+  const padding = { top: 20, bottom: 25, left: 10, right: 10 };
+  const chartW = width - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+
+  function getX(i) {
+    return padding.left + (i / (btcData.frames.length - 1)) * chartW;
+  }
+
+  function getY(val) {
+    const ratio = (val - minVal) / (maxVal - minVal || 1);
+    return padding.top + chartH * (1 - ratio);
+  }
+
+  // Draw background grid lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let yRatio = 0.2; yRatio <= 0.8; yRatio += 0.2) {
+    const y = padding.top + chartH * yRatio;
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(width - padding.right, y);
+  }
+  ctx.stroke();
+
+  // 1. Draw Buy & Hold Line (Cyan Blue)
+  drawLineSeries(history, f => f.bh_val, getX, getY, '#38bdf8', 'rgba(56, 189, 248, 0.15)');
+
+  // 2. Draw DCA Line (Emerald Green)
+  drawLineSeries(history, f => f.dca_val, getX, getY, '#10b981', 'rgba(16, 185, 129, 0.15)');
+
+  // 3. Draw Trader Line (Red)
+  drawLineSeries(history, f => f.trader_val, getX, getY, '#ef4444', 'rgba(239, 68, 68, 0.2)');
+
+  // Draw Glowing head dots for current frame
+  const currFrame = btcData.frames[currentIdx];
+  const lastX = getX(currentIdx);
+
+  drawHeadDot(lastX, getY(currFrame.bh_val), '#38bdf8');
+  drawHeadDot(lastX, getY(currFrame.dca_val), '#10b981');
+  drawHeadDot(lastX, getY(currFrame.trader_val), '#ef4444');
+}
+
+function drawLineSeries(history, valExtractor, getX, getY, strokeColor, fillColor) {
+  if (history.length < 2) return;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(getX(0), getY(valExtractor(history[0])));
+
+  for (let i = 1; i < history.length; i++) {
+    const x = getX(i);
+    const y = getY(valExtractor(history[i]));
+    ctx.lineTo(x, y);
+  }
+
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = strokeColor;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+
+  // Fill gradient below line
+  const lastX = getX(history.length - 1);
+  const firstX = getX(0);
+  const bottomY = canvas.getBoundingClientRect().height - 25;
+
+  ctx.lineTo(lastX, bottomY);
+  ctx.lineTo(firstX, bottomY);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(0, 0, 0, bottomY);
+  grad.addColorStop(0, fillColor);
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.shadowBlur = 0;
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawHeadDot(x, y, color) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 6, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.restore();
+}
+
+// Animation loop
+function playLoop() {
+  if (!isPlaying || !btcData) return;
+
+  const speed = parseInt(document.getElementById('speedSelect').value, 10);
+  currentFrame += speed;
+
+  if (currentFrame >= btcData.frames.length) {
+    currentFrame = btcData.frames.length - 1;
+    renderFrame(currentFrame);
+    pause();
+    return;
+  }
+
+  renderFrame(currentFrame);
+  animationReq = requestAnimationFrame(playLoop);
+}
+
+function play() {
+  if (!btcData) return;
+  isPlaying = true;
+  document.getElementById('btnPlay').textContent = '⏸ 일시정지';
+  playLoop();
+}
+
+function pause() {
+  isPlaying = false;
+  document.getElementById('btnPlay').textContent = '▶ 재생';
+  if (animationReq) cancelAnimationFrame(animationReq);
+}
+
+// Recording feature via html2canvas / MediaRecorder or Canvas Capture
+function startRecording() {
+  const reelsElement = document.getElementById('reelsContainer');
+  const recordBtn = document.getElementById('btnRecord');
+
+  // Capture canvas stream
+  const canvasStream = canvas.captureStream(60);
+  
+  recordedChunks = [];
+  try {
+    mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp9' });
+  } catch (e) {
+    mediaRecorder = new MediaRecorder(canvasStream);
+  }
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) recordedChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trust_no_internet_btc_reels.webm`;
+    a.click();
+    recordBtn.textContent = '📹 60초 영상 녹화 (MP4)';
+    recordBtn.classList.remove('recording');
+    alert('🎉 영상 녹화 완료! 다운로드 폴더를 확인하세요.');
+  };
+
+  mediaRecorder.start();
+  recordBtn.textContent = '🔴 녹화 중... (클릭 시 중지)';
+  recordBtn.classList.add('recording');
+
+  // Reset and play at 1x or selected speed
+  currentFrame = 0;
+  play();
+}
+
+// Event Listeners
+document.getElementById('btnPlay').addEventListener('click', () => {
+  if (isPlaying) pause(); else play();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  pause();
+  renderFrame(0);
+});
+
+document.getElementById('timeScrubber').addEventListener('input', (e) => {
+  pause();
+  renderFrame(parseInt(e.target.value, 10));
+});
+
+document.getElementById('btnRecord').addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  } else {
+    startRecording();
+  }
+});
+
+window.addEventListener('resize', () => {
+  setupCanvas();
+  if (btcData) renderFrame(currentFrame);
+});
+
+// Load on start
+window.onload = loadData;
+</script>
+</body>
+</html>
