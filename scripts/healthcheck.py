@@ -70,18 +70,29 @@ def checks(conn):
 
     # 6. 가격 결손. 감성만 있고 가격이 없으면 상관분석에서 조용히 빠진다.
     nopx = [r["code"] for r in conn.execute(
-        "SELECT e.code FROM entities e WHERE e.is_active=1 AND e.priority=1 "
+        "SELECT e.code FROM entities e WHERE e.is_active=1 AND e.priority<=2 "
         "AND NOT EXISTS (SELECT 1 FROM prices p WHERE p.code=e.code)")]
     out.append(_p(OK if not nopx else WARN, "상시 대상 가격 확보",
                   "" if not nopx else f"가격 없음: {', '.join(nopx)} — 시차 상관에서 제외됨"))
 
-    # 7. 최근 수집. 스케줄러가 멎으면 여기서 드러난다.
-    row = conn.execute("SELECT MAX(kst_date) d FROM coverage").fetchone()
-    last = row["d"] if row else None
+    # 7. 최근 수집. 스케줄러가 멎으면 여기서 드러난다. 전체 MAX 하나로 보면 한 엔티티만
+    #    돌아도 나머지의 정지가 가려지므로(2026-09 priority 기본값 사고) 엔티티별로 본다.
+    #    주말+휴일 사흘은 정상이라 WARN 은 3일, FAIL 은 5일부터.
     from datetime import date
-    gap = (date.today() - date.fromisoformat(last)).days if last else 999
-    out.append(_p(OK if gap <= 2 else WARN, f"최근 수집일 {last} ({gap}일 전)",
-                  "" if gap <= 2 else "스케줄러가 멎었는지 확인하라"))
+    today = date.today()
+    stale = []
+    for r in conn.execute(
+            "SELECT e.code, MAX(c.kst_date) d FROM entities e LEFT JOIN coverage c ON c.code=e.code "
+            "WHERE e.is_active=1 AND e.priority<=2 GROUP BY e.code"):
+        gap = (today - date.fromisoformat(r["d"])).days if r["d"] else 999
+        if gap >= 3:
+            stale.append((r["code"], r["d"], gap))
+    worst_gap = max((g for _, _, g in stale), default=0)
+    last = conn.execute("SELECT MAX(kst_date) d FROM coverage").fetchone()["d"]
+    out.append(_p(FAIL if worst_gap >= 5 else (WARN if stale else OK),
+                  f"최근 수집일 {last} (정지 엔티티 {len(stale)}개)",
+                  "" if not stale else "스케줄러가 멎었는지 확인하라: "
+                  + ", ".join(f"{c} {d} ({g}일)" for c, d, g in sorted(stale, key=lambda x: -x[2])[:8])))
 
     # 8. 미채점 잔량. 가중치 0 채널은 채점하지 않는 것이 정상이므로 분모에서 뺀다 —
     #    넣어두면 영원히 0에 닿지 않아 경고가 상시로 켜지고, 아무도 보지 않게 된다.
